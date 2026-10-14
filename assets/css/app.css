@@ -587,13 +587,12 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 .scale-display .sd-bars i { flex: 1; background: rgba(159, 176, 255, .35); border-radius: 2px; min-height: 2px; transition: height .1s; }
 
 /* этикетка (превью) */
-.label-prev { width: 100%; max-width: 380px; aspect-ratio: 100 / 70; background: #fff; color: #000; border-radius: 10px; border: 1px solid var(--border-strong); padding: 12px 14px; display: grid; grid-template-columns: 38% 1fr; gap: 12px; font-family: var(--font-sans); box-shadow: var(--sh); }
+.label-prev { width: 100%; max-width: 420px; aspect-ratio: 100 / 50; background: #fff; color: #000; border-radius: 10px; border: 1px solid var(--border-strong); padding: 2.2%; display: flex; gap: 2.2%; font-family: Arial, var(--font-sans); box-shadow: var(--sh); overflow: hidden; }
+.label-prev .lp-qr { width: 38%; flex: none; text-align: center; }
 .label-prev .lp-qr svg { width: 100%; height: auto; }
-.label-prev .lp-no { font: 700 11px var(--font-mono); text-align: center; margin-top: 4px; }
-.label-prev .lp-t { font: 700 9px/1 var(--font-display); letter-spacing: .08em; margin-bottom: 6px; }
-.label-prev .lp-p { font-weight: 800; font-size: 11.5px; line-height: 1.25; margin-bottom: 6px; }
-.label-prev dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 8px; margin: 0; font-size: 10px; }
-.label-prev dt { color: #555; } .label-prev dd { margin: 0; font-weight: 700; }
+.label-prev .lp-no { font: 700 11px Arial, sans-serif; margin-top: 2px; }
+.label-prev .lp-txt { flex: 1; min-width: 0; font-size: 10.5px; line-height: 1.32; font-weight: 700; }
+.label-prev .lp-p { font-weight: 800; font-size: 13px; line-height: 1.15; margin-bottom: 4px; }
 
 /* сканер */
 .scan-box { position: relative; border: 2px dashed var(--border-strong); border-radius: 18px; padding: 18px; background: var(--surface); display: flex; gap: 14px; align-items: center; }

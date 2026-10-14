@@ -586,35 +586,136 @@
     const vb = n + margin * 2;
     return raw(`<svg viewBox="0 0 ${vb} ${vb}" width="${size}" height="${size}" shape-rendering="crispEdges" role="img" aria-label="QR ${AP.esc(text)}"><rect width="${vb}" height="${vb}" fill="#fff"/><path d="${d}" fill="${color}"/></svg>`);
   };
-  UI.qrUrl = (id) => location.origin + location.pathname.replace(/[^/]*$/, '') + 'app.html#/qr/' + encodeURIComponent(id);
+  // QR ведёт на опубликованный сайт, даже если программа открыта локально — его сканируют телефоном
+  const PUBLIC_BASE = 'https://alex22826.github.io/ali-plast/';
+  UI.qrUrl = (id) => (/github\.io$/.test(location.hostname) ? location.origin + location.pathname.replace(/[^/]*$/, '') : PUBLIC_BASE) + 'app.html#/qr/' + encodeURIComponent(id);
   UI.parseCode = (s) => { const m = String(s || '').toUpperCase().match(/(AP-\d{6}|PL-\d{4})/); return m ? m[1] : null; };
 
-  /* Этикетка упаковочной единицы (ТЗ 6.2–6.3) */
-  UI.labelHTML = function (u) {
+  /* Этикетка упаковочной единицы (ТЗ 6.2–6.3). Одни и те же строки — на экране и на принтере */
+  UI.labelData = function (u) {
     const o = AP.order(u.orderId), p = AP.product(u.productId), c = o ? AP.client(o.clientId) : null;
     const isPallet = u.type === 'pallet';
+    const what = isPallet ? 'паллета, ' + AP.childrenOf(u.id).length + ' ед.' : AP.UNIT_TYPES[u.type].toLowerCase() + ' ' + (p.base === 'кг' ? F.kg(u.net) : F.num(u.pcs) + ' шт');
+    return {
+      code: u.id, content: UI.qrUrl(u.id), title: p.name,
+      lines: [
+        (o ? 'Заказ ' + o.no + ' · ' : '') + what,
+        c ? c.name.replace(/^(ООО|ЧП|ИП)\s*/, '').replace(/[«»]/g, '') : '',
+        'Нетто ' + F.num(u.net, 2) + ' / брутто ' + F.num(u.gross, 2) + ' кг',
+        AP.wsName(u.workshop) + ' · смена ' + (u.shift === 'A' ? 'А' : 'Б') + ' · ' + F.dt(u.at),
+        'CHIRCHIQ ALI PLAST',
+      ].filter(Boolean),
+    };
+  };
+  UI.labelHTML = function (u) {
+    const L = UI.labelData(u);
     return html`<div class="label-prev">
-      <div class="lp-qr">${UI.qrSVG(UI.qrUrl(u.id), { size: 200 })}<div class="lp-no">${u.id}</div></div>
-      <div>
-        <div class="lp-t">CHIRCHIQ ALI PLAST</div>
-        <div class="lp-p">${p.name}</div>
-        <dl>
-          <dt>Заказ</dt><dd>${o ? o.no : '—'}</dd>
-          <dt>Клиент</dt><dd>${c ? c.name.replace(/^(ООО|ЧП|ИП)\s*/, '') : '—'}</dd>
-          <dt>${isPallet ? 'Паллета' : AP.UNIT_TYPES[u.type]}</dt><dd>${p.base === 'кг' ? F.kg(u.net) : F.num(u.pcs) + ' шт'}${isPallet ? ' · ' + AP.childrenOf(u.id).length + ' ед.' : ''}</dd>
-          <dt>Нетто / брутто</dt><dd>${F.num(u.net, 2)} / ${F.num(u.gross, 2)} кг</dd>
-          <dt>Цех / смена</dt><dd>${AP.wsName(u.workshop)} · ${u.shift === 'A' ? 'А (день)' : 'Б (ночь)'}</dd>
-          <dt>Выпуск</dt><dd>${F.dt(u.at)}</dd>
-        </dl>
-      </div>
+      <div class="lp-qr">${UI.qrSVG(L.content, { size: 200 })}<div class="lp-no">${L.code}</div></div>
+      <div class="lp-txt"><div class="lp-p">${L.title}</div>${L.lines.map((x) => html`<div>${x}</div>`)}</div>
     </div>`;
   };
-  UI.printLabels = function (units) {
-    const css = `@page{size:100mm 70mm;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Manrope,Arial,sans-serif}
-      .label-prev{width:100mm;height:70mm;padding:4mm 5mm;display:grid;grid-template-columns:36mm 1fr;gap:4mm;page-break-after:always;color:#000}
-      .lp-qr svg{width:36mm;height:36mm}.lp-no{font:700 9pt monospace;text-align:center;margin-top:1mm}
-      .lp-t{font:800 7pt Arial;letter-spacing:.12em;margin-bottom:2mm}.lp-p{font-weight:800;font-size:10pt;line-height:1.2;margin-bottom:2mm}
-      dl{display:grid;grid-template-columns:max-content 1fr;gap:.6mm 2.5mm;margin:0;font-size:7.5pt}dt{color:#444}dd{margin:0;font-weight:700}`;
+
+  /* ---------- Печать этикеток ----------
+     Xprinter стоит в Windows на драйвере «Generic / Text Only»: из браузера он получает только текст,
+     поэтому печать из браузера выходит «не та». Правильный путь — агент печати на ПК с принтером
+     (E:\codeAI\xprinter\start-agent.bat): он шлёт принтеру команды TSPL напрямую. Задание идёт
+     в закрытый канал ntfy.sh/xprinter-<ключ>, ответ — в xprinter-<ключ>-done (как у телефона в проекте qr). */
+  const NTFY = 'https://ntfy.sh/', PKEY = 'ap.printerKey';
+  UI.printerKey = () => { try { return (localStorage.getItem(PKEY) || '').trim(); } catch (e) { return ''; } };
+  UI.setPrinterKey = (k) => { try { if (k) localStorage.setItem(PKEY, k); else localStorage.removeItem(PKEY); } catch (e) { /* без хранилища */ } };
+  // ключ из ссылки connect-aliplast.bat: app.html#printer=<ключ> — сохраняем и убираем из адреса
+  (function () {
+    const m = /^#printer=([a-z0-9]{8,64})$/i.exec(location.hash);
+    if (!m) return;
+    UI.setPrinterKey(m[1].toLowerCase());
+    history.replaceState(null, '', location.pathname + location.search + '#/qr');
+    UI._printerJustConnected = true;
+  })();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function sendPrintJob(job) {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const body = JSON.stringify(Object.assign({ id, created: new Date().toISOString(), copies: 1, kind: 'label' }, job));
+    for (let a = 0; a < 3; a++) {
+      try { const r = await fetch(NTFY + 'xprinter-' + UI.printerKey(), { method: 'POST', body }); if (r.ok) return id; } catch (e) { /* обрыв связи — ещё раз */ }
+      await sleep(700);
+    }
+    throw new Error('Нет связи с сервером печати — проверьте интернет');
+  }
+  async function waitPrinted(ids, sinceSec, timeoutMs) {
+    const left = new Set(ids), res = {};
+    const until = Date.now() + timeoutMs;
+    while (left.size && Date.now() < until) {
+      await sleep(2500);
+      try {
+        const r = await fetch(NTFY + 'xprinter-' + UI.printerKey() + '-done/json?poll=1&since=' + sinceSec, { cache: 'no-store' });
+        for (const line of (await r.text()).split('\n')) {
+          if (!line.trim()) continue;
+          const ev = JSON.parse(line);
+          if (ev.event !== 'message') continue;
+          const rep = JSON.parse(ev.message);
+          if (left.has(rep.id)) { res[rep.id] = rep; left.delete(rep.id); }
+        }
+      } catch (e) { /* связь моргнула — спросим ещё раз */ }
+    }
+    return { res, missing: [...left] };
+  }
+  UI.printLabels = async function (units) {
+    units = units.filter(Boolean);
+    if (!units.length) return;
+    if (!UI.printerKey()) { UI.printerSetup(units); return; }
+    if (units.length > 10 && !(await UI.confirm('Напечатать ' + units.length + ' этикеток?', 'Задания уйдут на Xprinter по очереди.', { ok: 'Печатать' }))) return;
+    const since = Math.floor(Date.now() / 1000) - 5;
+    UI.toast('Отправляю на Xprinter', units.length > 1 ? units.length + ' этикеток' : units[0].id, 'info');
+    const ids = [];
+    try { for (const u of units) ids.push(await sendPrintJob(UI.labelData(u))); }
+    catch (e) { UI.toast('Не отправилось', e.message, 'bad'); return; }
+    AP.audit('Печать этикеток на Xprinter', 'unit', units[0].id, units.map((u) => u.id).join(', '));
+    AP.save();
+    const { res, missing } = await waitPrinted(ids, since, 30000 + units.length * 6000);
+    const errs = Object.values(res).filter((r) => r.error);
+    if (missing.length === ids.length) UI.toast('Агент печати не ответил', 'Запустите на ПК с принтером E:\\codeAI\\xprinter\\start-agent.bat — задания напечатаются, как только он заработает', 'warn');
+    else if (errs.length) UI.toast('Ошибка принтера', errs[0].error, 'bad');
+    else UI.toast(ids.length > 1 ? 'Напечатано: ' + (ids.length - missing.length) + ' из ' + ids.length : 'Этикетка напечатана', units.length === 1 ? units[0].id : '');
+  };
+
+  /* подключение принтера: ключ из printer-key.txt или ссылка connect-aliplast.bat */
+  UI.printerSetup = function (units) {
+    const has = !!UI.printerKey();
+    const m = UI.modal({
+      title: 'Принтер этикеток Xprinter', sub: has ? 'Печать подключена через агента на компьютере с принтером' : 'Печать из браузера на этот принтер не работает — подключите агента',
+      body: html`<div class="stack" style="gap:14px">
+        <div class="alert alert-info">${I('info')}<div class="grow"><b>Почему из браузера печаталось «не то»</b><small>Xprinter стоит в Windows на драйвере «Generic / Text Only». Браузер передаёт через него только текст — QR и рамки теряются, а принтер ждёт свои команды TSPL. Агент печати отправляет этикетку принтеру напрямую.</small></div></div>
+        <ol class="text-2 fw-7" style="margin:0;padding-left:20px;line-height:1.7">
+          <li>На компьютере с принтером запустите <code>E:\\codeAI\\xprinter\\start-agent.bat</code> и не закрывайте окно.</li>
+          <li>Один раз на каждый браузер откройте <code>connect-aliplast.bat</code> — сайт запомнит ключ принтера. Или вставьте ключ из <code>printer-key.txt</code> ниже.</li>
+        </ol>
+        <div class="field"><label>Ключ принтера</label><input class="input mono" name="k" value="${UI.printerKey()}" placeholder="20 латинских букв и цифр" autocomplete="off" spellcheck="false"></div>
+        ${has ? html`<div class="alert alert-ok">${I('check')}<div class="grow"><b>Ключ сохранён в этом браузере</b><small>Этикетки идут на Xprinter. Тексты этикеток проходят через ntfy.sh в закрытом канале — так же, как печать с телефона.</small></div></div>` : ''}
+      </div>`,
+      foot: html`${units && units.length ? html`<button class="btn btn-ghost" data-browser>${I('print')}Печать через браузер</button>` : ''}${has ? html`<button class="btn btn-ghost" data-off>Отключить</button>` : ''}<button class="btn btn-primary" data-save>${I('check')}${units && units.length ? 'Сохранить и печатать' : 'Сохранить'}</button>`,
+    });
+    const inp = m.querySelector('[name=k]');
+    m.querySelector('[data-save]').onclick = () => {
+      const k = inp.value.trim().toLowerCase();
+      if (!/^[a-z0-9]{8,64}$/.test(k)) { inp.closest('.field').classList.add('is-invalid'); inp.focus(); return; }
+      UI.setPrinterKey(k); UI.closeTop(); UI.toast('Принтер подключён', 'Кнопка «Печать» отправляет этикетки на Xprinter');
+      if (units && units.length) UI.printLabels(units);
+      if (AP.render && AP.user) AP.render();
+    };
+    const off = m.querySelector('[data-off]'); if (off) off.onclick = () => { UI.setPrinterKey(''); UI.closeTop(); UI.toast('Принтер отключён в этом браузере', '', 'info'); if (AP.render && AP.user) AP.render(); };
+    const br = m.querySelector('[data-browser]'); if (br) br.onclick = () => { UI.closeTop(); UI.browserPrintLabels(units); };
+  };
+
+  UI.printerBtn = () => (UI.printerKey() ? html`<button class="btn btn-ghost btn-sm" data-x="printer" data-tip="Этикетки идут на Xprinter через агента печати"><span class="dot" style="background:var(--ok)"></span>Xprinter подключён</button>` : html`<button class="btn btn-soft btn-sm" data-x="printer">${I('print')}Подключить принтер</button>`);
+  UI.bindPrinterBtn = (el) => UI.$$('[data-x=printer]', el).forEach((b) => (b.onclick = () => UI.printerSetup()));
+
+  /* запасной путь: печать из браузера (для принтера с полным драйвером), этикетка 100×50 мм */
+  UI.browserPrintLabels = function (units) {
+    const css = `@page{size:100mm 50mm;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0}body{font-family:Arial,sans-serif;color:#000}
+      .label-prev{width:100mm;height:50mm;padding:2mm;display:flex;gap:2mm;overflow:hidden;break-inside:avoid}
+      .label-prev:not(:last-child){break-after:page}
+      .lp-qr{width:38mm;flex:none;text-align:center}.lp-qr svg{width:38mm;height:38mm;display:block}.lp-no{font:700 9pt Arial;margin-top:1mm}
+      .lp-txt{flex:1;min-width:0;font-size:9.5pt;line-height:1.3;font-weight:700}.lp-p{font-size:12pt;font-weight:800;line-height:1.15;margin-bottom:1.5mm}`;
     const fr = document.createElement('iframe');
     fr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
     document.body.appendChild(fr);
@@ -622,9 +723,9 @@
     doc.open();
     doc.write('<!doctype html><html><head><meta charset="utf-8"><title>Этикетки</title><style>' + css + '</style></head><body>' + units.map((u) => String(UI.labelHTML(u))).join('') + '</body></html>');
     doc.close();
-    setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(() => fr.remove(), 1500); }, 250);
+    fr.contentWindow.addEventListener('afterprint', () => setTimeout(() => fr.remove(), 500));
+    setTimeout(() => { fr.contentWindow.focus(); fr.contentWindow.print(); }, 300);
   };
-
   /* Печать документа (накладная, акт сверки, заказ-наряд) */
   UI.printDoc = function (title, bodyHTML) {
     const css = `@page{size:A4;margin:14mm}body{font-family:Manrope,Arial,sans-serif;color:#000;font-size:10.5pt}

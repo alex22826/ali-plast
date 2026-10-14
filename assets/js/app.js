@@ -334,5 +334,6 @@
     shell();
     bindGlobal();
     AP.render();
+    if (UI._printerJustConnected) UI.toast('Принтер Xprinter подключён', 'Кнопка «Печать» отправляет этикетки на принтер через агента');
   };
 })();

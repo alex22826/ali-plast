@@ -327,7 +327,7 @@
               ${S.op === 'raw' ? html`<div class="field"><label>Сырьё</label><select class="select" data-f="mat">${UI.options(mats.map((m) => [m.id, m.name]))}</select></div><div class="field"><label>Поставщик и документ</label><select class="select" data-f="sup">${UI.options(AP.db.suppliers.map((s) => [s.id, s.name]))}</select><input class="input mt-8" data-f="doc" placeholder="№ счёт-фактуры / накладной"></div>${AP.seeMoney() ? html`<div class="field"><label>Цена за кг, сум</label><input class="input" data-f="price" type="number" value="14500"></div>` : ''}` : ''}
               ${S.op !== 'raw' ? html`<div class="field"><label>Оператор</label><select class="select" data-f="opr">${UI.options(ops.map((e) => [e.id, e.name + ' · ' + e.position.toLowerCase()]), (ops.find((e) => e.shift === sh) || ops[0] || {}).id)}</select></div>` : ''}
               <div class="field"><label>Скан QR единицы <span class="muted">(если на ней уже есть этикетка)</span></label><div class="input-icon">${I('scan')}<input class="input" data-f="rescan" placeholder="AP-000123"></div><span class="hint" data-rescanhint>Одну и ту же единицу нельзя взвесить дважды</span></div>
-              ${S.op === 'goods' ? html`<label class="switch"><input type="checkbox" data-f="print" ${S.printNow ? raw('checked') : ''}>Сразу печатать этикетку</label>` : ''}
+              ${S.op === 'goods' ? html`<div class="row between"><label class="switch"><input type="checkbox" data-f="print" ${S.printNow ? raw('checked') : ''}>Сразу печатать этикетку</label>${UI.printerBtn()}</div>` : ''}
             </div></div>
             <div id="lastLabel">${S.last ? lastLabel(S.last) : html`<div class="card"><div class="card-b">${UI.empty('Здесь появится этикетка', 'QR-код создаётся сразу после взвешивания упаковочной единицы', 'qr')}</div></div>`}</div>
           </div>
@@ -369,6 +369,7 @@
         accept(el, { w, comment: r.comment });
       };
       const ll = UI.$('[data-x=printlast]', el); if (ll) ll.onclick = () => printUnit(S.last);
+      UI.bindPrinterBtn(el);
       AP._leave = () => { clearInterval(S.timer); S.timer = null; };
     },
   });
@@ -377,7 +378,7 @@
   function lastLabel(id) {
     const u = AP.unit(id);
     if (!u) return '';
-    return html`<div class="card iris"><div class="card-h"><h3>Этикетка готова</h3><span class="badge b-ok">${u.id}</span></div><div class="card-b">${UI.labelHTML(u)}<div class="row mt-12"><button class="btn btn-primary" data-x="printlast">${I('print')}Печать этикетки</button><a class="btn btn-ghost" href="#/qr/${u.id}">История единицы</a></div></div></div>`;
+    return html`<div class="card iris"><div class="card-h"><h3>Этикетка готова</h3><span class="badge b-ok">${u.id}</span></div><div class="card-b">${UI.labelHTML(u)}<div class="row mt-12"><button class="btn btn-primary" data-x="printlast">${I('print')}${UI.printerKey() ? 'Печать на Xprinter' : 'Печать этикетки'}</button><a class="btn btn-ghost" href="#/qr/${u.id}">История единицы</a></div></div></div>`;
   }
   function printUnit(id) { const u = AP.unit(id); if (!u) return; UI.printLabels([u]); }
 
@@ -508,7 +509,7 @@
       list = list.slice().sort((a, b) => (a.at < b.at ? 1 : -1));
       const ord = r.q.order ? AP.order(r.q.order) : null;
       return html`
-        ${UI.pageHead('QR-коды', 'Каждая коробка, мешок, рулон и паллета получает свой номер. Скан ручным сканером или камерой телефона показывает всю историю.')}
+        ${UI.pageHead('QR-коды', 'Каждая коробка, мешок, рулон и паллета получает свой номер. Скан ручным сканером или камерой телефона показывает всю историю.', AP.can('qr', 2) ? UI.printerBtn() : '')}
         <div class="scan-box mb-16 ${u && AP.inUserScope(u.workshop) ? 'ok' : r.id ? 'bad' : ''}"><span class="scan-ic">${I('scan')}</span>
           <div class="grow"><b>Отсканируйте QR или введите номер</b><input class="input input-lg mt-8" id="qrIn" placeholder="AP-000123 или PL-0001" autofocus autocomplete="off"></div>
           <button class="btn btn-secondary btn-lg" data-x="cam">${I('camera')}Камера</button></div>
@@ -530,6 +531,7 @@
       const pa = UI.$('[data-x=printall]', el);
       if (pa) pa.onclick = () => { let list = AP.db.units.filter((x) => AP.inScope(x.workshop)); if (r.q.order) list = list.filter((x) => x.orderId === r.q.order); if (r.q.s) list = list.filter((x) => x.status === r.q.s); UI.printLabels(list.slice(-30)); };
       UI.$('[data-x=cam]', el).onclick = () => camScan();
+      UI.bindPrinterBtn(el);
     },
   });
 
