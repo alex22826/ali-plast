@@ -269,7 +269,9 @@
     return (u.perms && u.perms[section]) || 0;
   };
   AP.can = (section, lvl = 1, u = AP.user) => AP.level(section, u) >= lvl;
-  AP.flag = (f, u = AP.user) => !!u && (u.role === 'director' || !!(u.flags && u.flags[f]));
+  // директору даются все особые права, но не ограничения: «только свои клиенты» — это сужение, а не право
+  const RESTRICT_FLAGS = ['ownClientsOnly'];
+  AP.flag = (f, u = AP.user) => !!u && (u.role === 'director' ? !RESTRICT_FLAGS.includes(f) : !!(u.flags && u.flags[f]));
   AP.seeMoney = () => AP.flag('money');
 
   /* область цехов: ограничение пользователя ∩ переключатель в сайдбаре */
