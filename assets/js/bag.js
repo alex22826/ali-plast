@@ -249,21 +249,67 @@ export function createBag(canvas, opts = {}) {
   }
   addEventListener('pointermove', onMove, { passive: true });
   addEventListener('pointerleave', () => (ptr.has = false));
-  canvas.addEventListener('pointerdown', (e) => { onMove(e); gust(1); });
+
+  /* ---------- вращение: пакет крутят, потянув курсором или пальцем (от положения курсора поворот не зависит) ---------- */
+  const TAU = Math.PI * 2;
+  const drag = { on: false, id: null, x: 0, y: 0, t: 0, moved: 0, spin: 0, v: 0, tilt: 0, tv: 0, hist: [] };
+  const overBag = () => ptr.has && Math.abs(ptr.wx - view.baseX) < W * 0.6 && Math.abs(ptr.wy - view.baseY) < H * 0.6;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') { if (e.button !== 0) return; e.preventDefault(); } // не выделять текст страницы при перетаскивании
+    onMove(e);
+    drag.on = true; drag.id = e.pointerId; drag.x = e.clientX; drag.y = e.clientY; drag.t = e.timeStamp || performance.now(); drag.moved = 0; drag.hist = []; drag.v = 0;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* без захвата тоже работает, пока курсор над холстом */ }
+    canvas.style.cursor = 'grabbing';
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag.on || e.pointerId !== drag.id) { canvas.style.cursor = overBag() ? 'grab' : ''; return; }
+    // время берём из самого события: если кадр рисуется долго, события приходят пачкой, а скорость броска должна быть настоящей
+    const now = e.timeStamp || performance.now();
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!dx && !dy) return; // браузер иногда шлёт повтор без сдвига — он не должен гасить скорость
+    drag.x = e.clientX; drag.y = e.clientY; drag.t = now; drag.moved += Math.abs(dx) + Math.abs(dy);
+    const a = dx * 0.012; // ≈ пол-оборота на 260 px
+    drag.spin += a;
+    drag.hist.push([now, a]); while (drag.hist.length && now - drag.hist[0][0] > 120) drag.hist.shift();
+    drag.tilt = Math.max(-0.45, Math.min(0.45, drag.tilt + dy * 0.004));
+    if (drag.moved > 6 && opts.onFirstDrag) { opts.onFirstDrag(); opts.onFirstDrag = null; }
+  });
+  const endDrag = (e) => {
+    if (!drag.on || (e && e.pointerId !== drag.id)) return;
+    drag.on = false;
+    // скорость броска — по движениям за последние ~0,1 с; если рука уже остановилась, разгона нет
+    const now = (e && e.timeStamp) || performance.now(), h = drag.hist.filter(([t]) => now - t < 120);
+    const span = h.length ? Math.max(0.03, (now - h[0][0]) / 1000) : 1;
+    drag.v = Math.max(-9, Math.min(9, h.reduce((s, [, a]) => s + a, 0) / span));
+    if (drag.moved < 6) gust(1); // просто нажали — дунуть, как раньше
+    canvas.style.cursor = overBag() ? 'grab' : '';
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('lostpointercapture', endDrag);
+  function spinStep() {
+    if (drag.on) { drag.tv = 0; return; }
+    drag.spin += drag.v * DT;
+    drag.v *= 0.965;
+    // когда вращение почти затихло — пакет мягко разворачивается лицом к зрителю (к ближайшему целому обороту)
+    if (Math.abs(drag.v) < 2.2) drag.v += (Math.round(drag.spin / TAU) * TAU - drag.spin) * 2.4 * DT;
+    drag.tv += -drag.tilt * 7 * DT; drag.tv *= 0.9; drag.tilt += drag.tv * DT * 6;
+  }
 
   /* ---------- физика ---------- */
   const st = { t: 0, shy: 0, shyT: 0, shake: 0, fly: -1, flyCb: null, gust: 0, rotY: 0, rotX: 0, rotZ: 0 };
   const m4 = new THREE.Matrix4(), eul = new THREE.Euler(), quat = new THREE.Quaternion(), vpos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
   function anchor() {
     const t = st.t;
-    st.rotY += ((reduce ? 0 : 0.26 * Math.sin(t * 0.21)) + ptr.sx * 0.5 + st.shyT * 1.15 - st.rotY) * 0.06;
-    st.rotX += ((reduce ? 0 : 0.06 * Math.sin(t * 0.33)) - ptr.sy * 0.2 - st.rotX) * 0.06;
-    st.rotZ += ((reduce ? 0 : 0.07 * Math.sin(t * 0.17 + 1.3)) - ptr.sx * 0.06 - st.rotZ) * 0.06;
+    // сам по себе пакет только слегка покачивается; поворачивает его человек — перетаскиванием (drag)
+    st.rotY += ((reduce ? 0 : 0.22 * Math.sin(t * 0.21)) + st.shyT * 1.15 - st.rotY) * 0.06;
+    st.rotX += ((reduce ? 0 : 0.06 * Math.sin(t * 0.33)) - st.rotX) * 0.06;
+    st.rotZ += ((reduce ? 0 : 0.07 * Math.sin(t * 0.17 + 1.3)) - st.rotZ) * 0.06;
     let x = view.baseX + (reduce ? 0 : 0.12 * Math.sin(t * 0.25)) + st.shake * 0.16 * Math.sin(t * 46);
     let y = view.baseY + (reduce ? 0 : 0.1 * Math.sin(t * 0.37));
     let rz = st.rotZ;
     if (st.fly >= 0) { y += st.fly * st.fly * 5.5; x += st.fly * 1.2; rz += st.fly * 1.4; }
-    eul.set(st.rotX, st.rotY, rz);
+    eul.set(st.rotX + drag.tilt, st.rotY + drag.spin, rz);
     quat.setFromEuler(eul); vpos.set(x, y, 0);
     m4.compose(vpos, quat, one);
     const e = m4.elements;
@@ -287,6 +333,7 @@ export function createBag(canvas, opts = {}) {
     st.shake *= 0.94;
     st.gust *= 0.96;
     if (st.fly >= 0) { st.fly += DT; if (st.fly > 1.05 && st.flyCb) { const cb = st.flyCb; st.flyCb = null; cb(); } }
+    spinStep();
     anchor();
     const t = st.t;
     const gustiness = (reduce ? 0.25 : 0.6 + 0.4 * Math.sin(t * 0.6) * Math.sin(t * 0.23)) + st.gust * 3 + (st.fly >= 0 ? 4 : 0);
@@ -346,13 +393,14 @@ export function createBag(canvas, opts = {}) {
     }
   }
 
-  let raf = 0, acc = 0, last = performance.now(), running = true;
+  let raf = 0, acc = 0, last = performance.now(), running = true, frames = 0, steps = 0;
   function frame(now) {
     if (!running) return;
     raf = requestAnimationFrame(frame);
+    frames++;
     acc += Math.min(0.1, (now - last) / 1000); last = now;
     let n = 0;
-    while (acc >= DT && n < 3) { step(); acc -= DT; n++; }
+    while (acc >= DT && n < 3) { step(); acc -= DT; n++; steps++; }
     if (n) { upload(); renderer.render(scene, camera); }
   }
   raf = requestAnimationFrame(frame);
@@ -367,7 +415,7 @@ export function createBag(canvas, opts = {}) {
     setShy(v) { st.shy = v ? (ptr.sx > 0 ? -1 : 1) : 0; },
     flyAway(cb) { st.fly = 0; st.flyCb = cb; st.shy = 0; },
     gust,
-    stats() { let nan = 0; for (let i = 0; i < pos.length; i++) if (!Number.isFinite(pos[i])) nan++; let rn = 0; for (let i = 0; i < rest.length; i++) if (!Number.isFinite(rest[i])) rn++; let cr = 0; for (let i = 0; i < CR.length; i++) if (!Number.isFinite(CR[i])) cr++; return { N, nan, rn, cr, C: CA.length, base: [view.baseX, view.baseY, camera.position.z], t: [target[0], target[1], target[2]] }; },
+    stats() { let nan = 0; for (let i = 0; i < pos.length; i++) if (!Number.isFinite(pos[i])) nan++; let rn = 0; for (let i = 0; i < rest.length; i++) if (!Number.isFinite(rest[i])) rn++; let cr = 0; for (let i = 0; i < CR.length; i++) if (!Number.isFinite(CR[i])) cr++; return { N, nan, rn, cr, C: CA.length, base: [view.baseX, view.baseY, camera.position.z], t: [target[0], target[1], target[2]], spin: drag.spin, v: drag.v, tilt: drag.tilt, rotY: st.rotY, running, frames, steps, acc }; },
     dispose() { running = false; cancelAnimationFrame(raf); renderer.dispose(); },
   };
 }
