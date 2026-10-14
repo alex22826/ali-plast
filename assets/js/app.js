@@ -121,7 +121,7 @@
       <label class="tb-search input-icon">${I('search')}<input class="input" id="gsearch" placeholder="Заказ, клиент или QR (AP-000123)" autocomplete="off"><kbd>/</kbd></label>
       <button class="btn btn-icon tb-find" data-act="search" aria-label="Поиск">${I('search')}</button>
       <span class="conn ${off ? 'off' : ''}" data-tip="${off ? 'Нет связи: взвешивания сохраняются на месте и догрузятся позже' : 'Весы и сканеры на связи'}"><i></i><span>${off ? 'Офлайн · ' + AP.pendingSync() + ' в очереди' : 'Весы на связи'}</span></span>
-      <button class="btn btn-icon bell" data-act="alerts" data-tip="Уведомления" aria-label="Уведомления">${I('bell')}${alerts.length ? html`<span class="dot">${alerts.length > 99 ? '99+' : alerts.length}</span>` : ''}</button>
+      <button class="btn btn-icon bell ${AP.capCount(alerts.length).length > 2 ? 'bell-wide' : ''}" data-act="alerts" data-tip="Уведомления" aria-label="Уведомления${alerts.length ? ': ' + alerts.length : ''}">${I('bell')}${alerts.length ? html`<span class="bell-n">${AP.capCount(alerts.length)}</span>` : ''}</button>
       <button class="btn btn-icon" data-act="theme" data-tip="${AP.themeTip()}" aria-label="Сменить тему">${I(AP.theme() === 'dark' ? 'sun' : 'moon')}</button>`);
   }
 
@@ -131,7 +131,7 @@
   function bnav(active, counts) {
     const pref = (BNAV[AP.user.role] || []).filter((k) => AP.can(k));
     const items = pref.concat(AP.SECTIONS.map((s) => s.key).filter((k) => AP.can(k) && !pref.includes(k))).slice(0, 4);
-    UI.$('#bnav').innerHTML = String(html`<div style="display:contents">${items.map((k) => html`<a href="#/${k}" class="${k === active ? 'on' : ''}">${I(AP.SECTIONS.find((s) => s.key === k).icon)}<span>${SHORT[k]}</span>${counts[k] ? html`<span class="cnt">${counts[k].n}</span>` : ''}</a>`)}<button type="button" data-act="nav-open" class="${items.includes(active) ? '' : 'on'}">${I('menu')}<span>Меню</span></button></div>`);
+    UI.$('#bnav').innerHTML = String(html`<div style="display:contents">${items.map((k) => html`<a href="#/${k}" class="${k === active ? 'on' : ''}">${I(AP.SECTIONS.find((s) => s.key === k).icon)}<span>${SHORT[k]}</span>${counts[k] ? html`<span class="cnt">${AP.capCount(counts[k].n)}</span>` : ''}</a>`)}<button type="button" data-act="nav-open" class="${items.includes(active) ? '' : 'on'}">${I('menu')}<span>Меню</span></button></div>`);
   }
   let lastKey = null;
   function routeBar() { const b = UI.$('#routebar'); if (!b) return; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go'); }

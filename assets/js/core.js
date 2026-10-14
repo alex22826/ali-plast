@@ -18,6 +18,8 @@
   }
   AP.esc = esc;
   AP.raw = (s) => new Raw(String(s));
+  // счётчик в значке: больше 50 не показываем, иначе кружок разъезжается — «50+»
+  AP.capCount = (n, max = 50) => (n > max ? max + '+' : String(n));
   AP.html = (strings, ...vals) => {
     let out = '';
     strings.forEach((s, i) => { out += s; if (i < vals.length) out += toHTML(vals[i]); });
