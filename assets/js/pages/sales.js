@@ -78,21 +78,24 @@
         ${UI.pageHead('Заказы', 'Весь путь заказа: от заявки клиента до погрузки. Статус двигается сам — по весам, складу и оплатам.', html`
           <button class="btn btn-secondary" data-x="export">${I('download')}Excel</button>
           ${AP.can('orders', 2) ? html`<button class="btn btn-primary" data-x="new">${I('plus')}Новый заказ</button>` : ''}`)}
-        <div class="pipeline mb-16">${AP.STATUS_ORDER.map((k) => html`<button class="pipe ${q.st === k ? 'on' : ''}" data-st="${k}" data-tip="${AP.STATUSES[k].t}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].s}</span><b>${counts[k] || 0}</b></button>`)}</div>
         <div class="card">
           <div class="card-h" style="padding-bottom:14px">
             <div class="input-icon grow" style="max-width:340px">${I('search')}<input class="input" data-f="q" placeholder="Номер, клиент, продукция…" value="${q.q || ''}"></div>
+            <select class="select" data-f="st" aria-label="Статус" data-search="off" style="max-width:250px">
+              <option value="" data-count="${all.length - (counts.closed || 0)}" ${!q.st && q.view !== 'all' ? raw('selected') : ''}>Все активные</option>
+              <option value="all" data-count="${all.length}" ${!q.st && q.view === 'all' ? raw('selected') : ''}>Все, включая закрытые</option>
+              ${AP.STATUS_ORDER.map((k, i) => html`<option value="${k}" data-dot="${AP.STATUSES[k].c}" data-count="${counts[k] || 0}" ${i === 0 ? raw('data-sep') : ''} ${q.st === k ? raw('selected') : ''}>${AP.STATUSES[k].t}</option>`)}
+            </select>
             <select class="select" data-f="c" aria-label="Клиент" style="max-width:260px">${UI.options(clients.map((c) => [c.id, c.name]), q.c, 'Все клиенты')}</select>
             <label class="switch"><input type="checkbox" data-f="late" ${q.late ? raw('checked') : ''}>Только просроченные</label>
-            <div class="seg right"><button class="${q.view !== 'all' ? 'on' : ''}" data-view="">Активные</button><button class="${q.view === 'all' ? 'on' : ''}" data-view="all">Все, включая закрытые</button></div>
           </div>
           ${UI.ordersTable(list)}
           <div class="card-f muted fs-12">Показано: ${list.length} из ${all.length}${q.st ? ' · фильтр: ' + AP.STATUSES[q.st].t : ''}${q.st || q.c || q.q || q.late ? html` · <a href="#/orders">сбросить</a>` : ''}</div>
         </div>`;
     },
     mount(el, r) {
-      UI.$$('[data-st]', el).forEach((b) => (b.onclick = () => AP.setQuery({ st: r.q.st === b.dataset.st ? '' : b.dataset.st })));
-      UI.$$('[data-view]', el).forEach((b) => (b.onclick = () => AP.setQuery({ view: b.dataset.view, st: '' })));
+      // один список вместо плиток и переключателя «Активные / Все»: '' — активные, 'all' — все, иначе конкретный статус
+      UI.$('[data-f=st]', el).onchange = (e) => { const v = e.target.value; AP.setQuery(v === '' || v === 'all' ? { st: '', view: v } : { st: v }); };
       const qi = UI.$('[data-f=q]', el);
       let t;
       qi.oninput = () => { clearTimeout(t); t = setTimeout(() => { AP.setQuery({ q: qi.value }); setTimeout(() => { const n = UI.$('[data-f=q]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 0); }, 350); };

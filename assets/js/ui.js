@@ -176,6 +176,11 @@
     const s = wrap.querySelector('select');
     return (s && (s.dataset.title || s.getAttribute('aria-label'))) || 'Выберите вариант';
   }
+  // пункт списка: необязательная цветная точка (data-dot="b-info"), текст и счётчик справа (data-count)
+  function optInner(o) {
+    const d = o.dataset;
+    return (o.hasAttribute('data-dot') ? '<i class="csel-dot ' + AP.esc(d.dot) + '"></i>' : '') + '<span>' + AP.esc(o.textContent) + '</span>' + (d.count != null ? '<em class="csel-n">' + AP.esc(d.count) + '</em>' : '');
+  }
   function openSelect(sel, wrap, btn) {
     if (openSel && openSel.sel === sel) return closeSelect(true);
     closeSelect();
@@ -186,7 +191,7 @@
     const menu = document.createElement('div');
     menu.className = 'csel-menu' + (sheet ? ' sheet' : '');
     menu.setAttribute('role', 'listbox');
-    const searchable = opts.length > 8;
+    const searchable = opts.length > 8 && sel.dataset.search !== 'off';
     menu.innerHTML = (sheet ? '<div class="csel-sheet-h"><i></i><b>' + AP.esc(fieldLabel(wrap)) + '</b></div>' : '') + (searchable ? '<div class="csel-search"><input class="input input-sm" placeholder="Поиск…" autocomplete="off"></div>' : '') + '<div class="csel-list"></div>';
     const list = menu.querySelector('.csel-list');
     let act = sel.selectedIndex;
@@ -194,7 +199,7 @@
     const draw = (q) => {
       const s = (q || '').toLowerCase();
       shown = opts.map((o, i) => [o, i]).filter(([o]) => !s || o.textContent.toLowerCase().includes(s));
-      list.innerHTML = shown.length ? shown.map(([o, i]) => '<div class="csel-opt' + (i === sel.selectedIndex ? ' sel' : '') + (i === act ? ' act' : '') + (o.disabled ? ' off' : '') + '" role="option" data-i="' + i + '" aria-selected="' + (i === sel.selectedIndex) + '"><span>' + AP.esc(o.textContent) + '</span>' + CHECK + '</div>').join('') : '<div class="csel-empty">Ничего не найдено</div>';
+      list.innerHTML = shown.length ? shown.map(([o, i]) => (!s && o.hasAttribute('data-sep') ? '<div class="csel-sep" role="separator"></div>' : '') + '<div class="csel-opt' + (i === sel.selectedIndex ? ' sel' : '') + (i === act ? ' act' : '') + (o.disabled ? ' off' : '') + (o.dataset.count === '0' ? ' zero' : '') + '" role="option" data-i="' + i + '" aria-selected="' + (i === sel.selectedIndex) + '">' + optInner(o) + CHECK + '</div>').join('') : '<div class="csel-empty">Ничего не найдено</div>';
     };
     draw();
     document.body.appendChild(menu);
@@ -205,10 +210,10 @@
       const r = wrap.getBoundingClientRect();
       menu.style.minWidth = r.width + 'px';
       const below = innerHeight - r.bottom - 10, above = r.top - 10;
-      const h = Math.min(menu.scrollHeight, 340);
+      const h = Math.min(menu.scrollHeight, 480);
       const up = below < Math.min(h, 220) && above > below;
       menu.classList.toggle('up', up);
-      menu.style.maxHeight = Math.max(160, Math.min(340, up ? above : below)) + 'px';
+      menu.style.maxHeight = Math.max(160, Math.min(480, up ? above : below)) + 'px';
       const mh = Math.min(menu.scrollHeight, parseFloat(menu.style.maxHeight));
       menu.style.top = (up ? r.top - mh - 6 : r.bottom + 6) + 'px';
       const w = menu.offsetWidth;
@@ -267,7 +272,7 @@
     const sync = () => {
       const o = sel.options[sel.selectedIndex];
       btn.className = 'csel-btn ' + Array.from(sel.classList).filter((x) => /^lvl-/.test(x)).join(' ');
-      btn.innerHTML = '<span>' + AP.esc(o ? o.textContent : '—') + '</span>';
+      btn.innerHTML = o ? optInner(o) : '<span>—</span>';
       btn.disabled = sel.disabled;
       wrap.classList.toggle('disabled', sel.disabled);
     };

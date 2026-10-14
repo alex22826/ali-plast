@@ -725,6 +725,15 @@ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *
 .csel-opt.sel svg { opacity: 1; }
 .csel-opt.off { opacity: .45; pointer-events: none; }
 .csel-empty { padding: 14px 10px; color: var(--text-3); font-weight: 600; font-size: 13px; }
+/* точка статуса и счётчик в пунктах (data-dot / data-count у <option>) */
+.csel-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--bd-c, var(--slate)); }
+.csel-dot.b-dark { --bd-c: var(--text-2); }
+.csel-n { font: 700 12px/20px var(--font-sans); font-style: normal; min-width: 24px; height: 20px; padding: 0 7px; border-radius: 999px; text-align: center; flex: none;
+  background: var(--surface-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.csel-opt.sel .csel-n { background: var(--surface); color: var(--brand-t); }
+.csel-opt.zero > span, .csel-opt.zero .csel-n { color: var(--text-3); }
+.csel-btn .csel-n { margin-right: -2px; }
+.csel-sep { height: 1px; margin: 5px 4px; background: var(--border); }
 .csel-sheet-h { display: none; }
 .csel-scrim { position: fixed; inset: 0; z-index: 255; background: rgba(6, 10, 20, .5); animation: fadeIn .2s ease; }
 @keyframes sheetIn { from { transform: translateY(100%); } }
