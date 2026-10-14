@@ -191,8 +191,15 @@ code, .mono { font-family: var(--font-mono); font-size: .92em; }
   background: var(--ink-900); color: var(--ink-200);
   display: flex; flex-direction: column; z-index: 40;
   border-right: 1px solid rgba(255, 255, 255, .04);
-  scrollbar-width: thin; scrollbar-color: var(--ink-700) transparent;
+  scrollbar-width: none;
 }
+.sidebar::-webkit-scrollbar { display: none; }
+/* в приложении прокручивается внутренний слой, а сам сайдбар только обрезает: так фокус клавиатуры не сдвинет его вбок */
+.app > .sidebar { overflow: hidden; overflow: clip; }
+.sb-in { display: flex; flex-direction: column; width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; }
+.sb-in::-webkit-scrollbar { display: none; }
+.sb-scope { position: relative; }
+.sb-scope-mini { display: none; }
 .sidebar::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--iris); opacity: .9; }
 .sb-brand { display: flex; align-items: center; gap: 12px; padding: 22px 20px 18px; color: #fff; text-decoration: none !important; }
 .sb-brand .logo-mark { width: 38px; height: 38px; flex: none; }
@@ -680,9 +687,7 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
 ::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-h); border: 3px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-corner, ::-webkit-scrollbar-button { display: none; background: transparent; }
-.sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border: 3px solid transparent; background-clip: padding-box; }
-.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .22); border: 3px solid transparent; background-clip: padding-box; }
-@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; } .sidebar { scrollbar-color: rgba(255, 255, 255, .14) transparent; } }
+@supports (-moz-appearance: none) { * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; } .sidebar, .sb-in { scrollbar-width: none; } }
 
 /* ---------- Переход между разделами ---------- */
 .page.enter > * { animation: pageIn .46s var(--ease) both; }
@@ -775,8 +780,8 @@ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *
   .content { padding: 20px 20px 48px; }
 }
 
-/* ---------- Адаптив: планшет — сайдбар-«рельс» с иконками ---------- */
-@media (min-width: 721px) and (max-width: 1080px) {
+/* ---------- Адаптив: сенсорный планшет — неподвижный «рельс» с иконками (наведения нет) ---------- */
+@media (min-width: 721px) and (max-width: 1080px) and (hover: none) {
   :root { --sidebar-w: 76px; }
   .app { grid-template-columns: var(--sidebar-w) 1fr; }
   .sb-brand { justify-content: center; padding: 18px 0 14px; }
@@ -794,7 +799,59 @@ html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *
   .sb-scope .lock { justify-content: center; padding: 7px 0; }
   .sb-scope .lock span { display: none; }
   .sb-user { flex-direction: column; gap: 6px; padding: 8px 0; margin: 0 10px 12px; }
-  .topbar { padding: 0 20px; }
+}
+@media (min-width: 721px) and (max-width: 1080px) { .topbar { padding: 0 20px; } }
+
+/* ---------- Компьютер с мышью: сайдбар свёрнут в «рельс» и раскрывается при наведении ПОВЕРХ страницы ----------
+   Колонка под сайдбар всегда 76px, поэтому раскрытие не двигает данные. Внутренний слой всегда шириной 268px —
+   при сворачивании он просто обрезается, строки не переносятся и не прыгают по вертикали.
+   Задержки: открытие через 0,07 с (не мигать, когда мышь просто пересекает край), закрытие через 0,16 с. */
+@media (min-width: 721px) and (hover: hover) {
+  :root { --sidebar-w: 76px; --sb-open: 268px; }
+  .app { grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+  .sb-auto { width: var(--sidebar-w); z-index: 70; transition: width .26s var(--ease) .16s, box-shadow .26s ease .16s; }
+  .sb-auto:hover, .sb-auto:has(:focus-visible) { width: var(--sb-open); box-shadow: 16px 0 44px rgba(6, 10, 20, .32); transition-delay: .07s, .07s; }
+  .sb-auto .sb-in { width: var(--sb-open); }
+
+  /* то, что видно только в раскрытом виде: подписи, переключатель цеха, имя и «Выйти» */
+  .sb-auto .sb-brand > span, .sb-auto .sb-group > span, .sb-auto .sb-link > span:not(.sb-count), .sb-auto .sb-link > .sb-lock,
+  .sb-auto .sb-user .who, .sb-auto .sb-user .btn-icon, .sb-auto .sb-scope > :not(.sb-scope-mini) {
+    opacity: 0; visibility: hidden; transition: opacity .12s ease .16s, visibility 0s linear .28s;
+  }
+  .sb-auto:hover :is(.sb-brand > span, .sb-group > span, .sb-link > span:not(.sb-count), .sb-link > .sb-lock, .sb-user .who, .sb-user .btn-icon, .sb-scope > :not(.sb-scope-mini)),
+  .sb-auto:has(:focus-visible) :is(.sb-brand > span, .sb-group > span, .sb-link > span:not(.sb-count), .sb-link > .sb-lock, .sb-user .who, .sb-user .btn-icon, .sb-scope > :not(.sb-scope-mini)) {
+    /* кликабельно только когда уже видно: быстрый клик по свёрнутому рельсу не сменит цех и не разлогинит */
+    opacity: 1; visibility: visible; transition: opacity .2s ease .16s, visibility 0s linear .16s;
+  }
+  .sb-auto .sb-link > span:not(.sb-count), .sb-auto .sb-brand > span { white-space: nowrap; }
+
+  /* логотип и иконки стоят по центру рельса (38px) в обоих состояниях */
+  .sb-auto .sb-brand { padding: 22px 19px 18px; }
+  .sb-auto .sb-link { width: 52px; padding: 9px 0 9px 17px; white-space: nowrap; transition: width .26s var(--ease) .16s, background .15s, color .15s; }
+  .sb-auto:hover .sb-link, .sb-auto:has(:focus-visible) .sb-link { width: 100%; transition-delay: .07s, 0s, 0s; }
+  .sb-auto .sb-link .sb-count { position: absolute; right: 3px; top: 3px; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10.5px; margin: 0; transition: right .26s var(--ease) .16s, top .26s var(--ease) .16s; }
+  .sb-auto:hover .sb-link .sb-count, .sb-auto:has(:focus-visible) .sb-link .sb-count { right: 10px; top: calc(50% - 9px); transition-delay: .07s; }
+  .sb-auto .sb-link > .sb-lock { position: absolute; right: 12px; top: calc(50% - 7px); margin: 0; }
+
+  /* названия групп в рельсе заменяет короткая черта — высота строк не меняется */
+  .sb-auto .sb-group { position: relative; }
+  .sb-auto .sb-group::before { content: ''; position: absolute; left: 28px; top: 7px; width: 20px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .09); transition: opacity .12s ease .2s; }
+  .sb-auto:hover .sb-group::before, .sb-auto:has(:focus-visible) .sb-group::before { opacity: 0; transition-delay: .07s; }
+
+  /* цех: в рельсе — значок текущего цеха, в раскрытом — полный переключатель */
+  .sb-auto .sb-scope { transition: background-color .2s ease .16s, border-color .2s ease .16s; background-color: transparent; border-color: transparent; }
+  .sb-auto:hover .sb-scope, .sb-auto:has(:focus-visible) .sb-scope { background-color: var(--ink-850); border-color: var(--ink-700); transition-delay: .1s; }
+  .sb-auto .sb-scope-mini { display: flex; align-items: center; justify-content: center; gap: 5px; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 48px;
+    background: var(--ink-850); border: 1px solid var(--ink-700); border-radius: 12px; color: #fff; font-size: 11.5px; font-weight: 800; pointer-events: none; transition: opacity .15s ease .2s; }
+  .sb-auto .sb-scope-mini i { width: 7px; height: 7px; border-radius: 50%; }
+  .sb-auto:hover .sb-scope-mini, .sb-auto:has(:focus-visible) .sb-scope-mini { opacity: 0; transition-delay: .07s; }
+
+  /* карточка пользователя: в рельсе — только аватар */
+  .sb-auto .sb-user { width: 52px; padding: 8px 8px 8px 9px; overflow: hidden; transition: width .26s var(--ease) .16s; }
+  .sb-auto:hover .sb-user, .sb-auto:has(:focus-visible) .sb-user { width: calc(var(--sb-open) - 24px); transition-delay: .07s; }
+}
+@media (min-width: 721px) and (hover: hover) and (prefers-reduced-motion: reduce) {
+  .sb-auto, .sb-auto * { transition-duration: 0s !important; }
 }
 
 /* ---------- Адаптив: телефон ---------- */

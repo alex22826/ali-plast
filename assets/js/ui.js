@@ -419,8 +419,8 @@
   UI.showTip = showTip; UI.hideTip = hideTip;
   document.addEventListener('mouseover', (e) => {
     let el = e.target.closest && e.target.closest('[data-tip]');
-    // подписи разделов в сайдбаре нужны только в узком режиме (планшет), иначе текст и так виден
-    if (el && el.dataset.tipRail && !matchMedia('(min-width: 721px) and (max-width: 1080px)').matches) el = el.parentElement && el.parentElement.closest('[data-tip]:not([data-tip-rail])');
+    // подписи разделов в сайдбаре нужны только на сенсорном планшете: с мышью сайдбар сам раскрывается и показывает текст
+    if (el && el.dataset.tipRail && !matchMedia('(min-width: 721px) and (max-width: 1080px) and (hover: none)').matches) el = el.parentElement && el.parentElement.closest('[data-tip]:not([data-tip-rail])');
     if (el && el !== tipFor) { tipFor = el; showTipFor(el); }
     else if (!el && tipFor) hideTip();
   });

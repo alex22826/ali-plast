@@ -62,7 +62,7 @@
   function shell() {
     document.body.innerHTML = String(html`
       <div class="app">
-        <aside class="sidebar" id="sidebar"></aside>
+        <aside class="sidebar sb-auto" id="sidebar"></aside>
         <div class="main">
           <header class="topbar" id="topbar"></header>
           <main class="content" id="view"></main>
@@ -85,15 +85,20 @@
     const counts = sideCounts();
     const fixed = AP.userWorkshop();
     const scope = AP.scope();
+    const SCOPES = [['all', 'Все цеха', 'Все'], ['w1', 'Цех №1', 'Ц1'], ['w2', 'Цех №2', 'Ц2']];
+    // в свёрнутом сайдбаре вместо переключателя виден только значок текущего цеха
+    const mini = fixed !== 'all'
+      ? html`<span class="sb-scope-mini" aria-hidden="true"><i style="background:var(--${fixed})"></i>${AP.workshop(fixed).short}</span>`
+      : html`<span class="sb-scope-mini" aria-hidden="true">${SCOPES.find(([k]) => k === scope)[2]}</span>`;
     const scopeBox = fixed !== 'all'
-      ? html`<div class="sb-scope"><div class="lock" data-tip="Начальник цеха видит только свой цех" data-tip-pos="right"><i style="background:var(--${fixed})"></i><b class="full">${AP.wsName(fixed)}</b><b class="short">${AP.workshop(fixed).short}</b><span class="right muted fs-12" style="color:var(--ink-300)">только свой цех</span></div></div>`
-      : html`<div class="sb-scope" role="group" aria-label="Цех">${[['all', 'Все цеха', 'Все'], ['w1', 'Цех №1', 'Ц1'], ['w2', 'Цех №2', 'Ц2']].map(([k, t, sh]) => html`<button class="${scope === k ? 'on' : ''}" data-act="scope" data-v="${k}"><span class="full">${t}</span><span class="short">${sh}</span></button>`)}</div>`;
-    UI.$('#sidebar').innerHTML = String(html`
+      ? html`<div class="sb-scope">${mini}<div class="lock" data-tip="Начальник цеха видит только свой цех" data-tip-pos="right"><i style="background:var(--${fixed})"></i><b class="full">${AP.wsName(fixed)}</b><b class="short">${AP.workshop(fixed).short}</b><span class="right muted fs-12" style="color:var(--ink-300)">только свой цех</span></div></div>`
+      : html`<div class="sb-scope" role="group" aria-label="Цех">${mini}${SCOPES.map(([k, t, sh]) => html`<button class="${scope === k ? 'on' : ''}" data-act="scope" data-v="${k}"><span class="full">${t}</span><span class="short">${sh}</span></button>`)}</div>`;
+    UI.$('#sidebar').innerHTML = String(html`<div class="sb-in">
       <a class="sb-brand" href="#/${AP.homeKey()}">${UI.logoMark(38)}<span><b>ALI PLAST</b><small>Chirchiq · учёт</small></span></a>
       ${scopeBox}
       <nav class="sb-nav">${groups.map((g) => html`<div class="sb-group"><span>${g.name}</span>${g.items.map((s) => html`
         <a class="sb-link ${active === s.key ? 'active' : ''}" href="#/${s.key}" data-tip="${s.title}" data-tip-pos="right" data-tip-rail="1">${I(s.icon)}<span>${s.title}</span>${s.directorOnly ? html`<span class="sb-lock" data-tip="Только директор" data-tip-pos="right">${I('lock', 'sb-lock')}</span>` : counts[s.key] ? html`<span class="sb-count ${counts[s.key].bad ? 'bad' : ''}">${counts[s.key].n}</span>` : ''}</a>`)}</div>`)}</nav>
-      <div class="sb-user">${UI.avatar(u.name, u.id)}<div class="who"><b>${u.name}</b><small>${u.title}</small></div><button class="btn btn-icon btn-sm" data-act="logout" data-tip="Выйти" data-tip-pos="right" aria-label="Выйти">${I('logout')}</button></div>`);
+      <div class="sb-user">${UI.avatar(u.name, u.id)}<div class="who"><b>${u.name}</b><small>${u.title}</small></div><button class="btn btn-icon btn-sm" data-act="logout" data-tip="Выйти" data-tip-pos="right" aria-label="Выйти">${I('logout')}</button></div></div>`);
   }
   function sideCounts() {
     const c = {};
