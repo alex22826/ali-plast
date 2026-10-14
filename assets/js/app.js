@@ -93,13 +93,29 @@
     const scopeBox = fixed !== 'all'
       ? html`<div class="sb-scope">${mini}<div class="lock" data-tip="Начальник цеха видит только свой цех" data-tip-pos="right"><i style="background:var(--${fixed})"></i><b class="full">${AP.wsName(fixed)}</b><b class="short">${AP.workshop(fixed).short}</b><span class="right muted fs-12" style="color:var(--ink-300)">только свой цех</span></div></div>`
       : html`<div class="sb-scope" role="group" aria-label="Цех">${mini}${SCOPES.map(([k, t, sh]) => html`<button class="${scope === k ? 'on' : ''}" data-act="scope" data-v="${k}"><span class="full">${t}</span><span class="short">${sh}</span></button>`)}</div>`;
+    const prevNav = UI.$('#sidebar .sb-nav');
+    const keepScroll = prevNav ? prevNav.scrollTop : 0; // при переходе в раздел список не прыгает наверх
     UI.$('#sidebar').innerHTML = String(html`<div class="sb-in">
       <a class="sb-brand" href="#/${AP.homeKey()}">${UI.logoMark(38)}<span><b>ALI PLAST</b><small>Chirchiq · учёт</small></span></a>
       ${scopeBox}
       <nav class="sb-nav">${groups.map((g) => html`<div class="sb-group"><span>${g.name}</span>${g.items.map((s) => html`
         <a class="sb-link ${active === s.key ? 'active' : ''}" href="#/${s.key}" data-tip="${s.title}" data-tip-pos="right" data-tip-rail="1">${I(s.icon)}<span>${s.title}</span>${s.directorOnly ? html`<span class="sb-lock" data-tip="Только директор" data-tip-pos="right">${I('lock', 'sb-lock')}</span>` : counts[s.key] ? html`<span class="sb-count ${counts[s.key].bad ? 'bad' : ''}">${counts[s.key].n}</span>` : ''}</a>`)}</div>`)}</nav>
       <div class="sb-user">${UI.avatar(u.name, u.id)}<div class="who"><b>${u.name}</b><small>${u.title}</small></div><button class="btn btn-icon btn-sm" data-act="logout" data-tip="Выйти" data-tip-pos="right" aria-label="Выйти">${I('logout')}</button></div></div>`);
+    const nav = UI.$('#sidebar .sb-nav');
+    nav.scrollTop = keepScroll;
+    const act = nav.querySelector('.sb-link.active');
+    if (act) { const a = act.getBoundingClientRect(), n = nav.getBoundingClientRect(); if (a.top < n.top || a.bottom > n.bottom) act.scrollIntoView({ block: 'nearest' }); }
+    nav.addEventListener('scroll', sbEdges, { passive: true });
+    sbEdges();
   }
+  // мягкое затухание у края списка, пока его можно прокрутить дальше — пункт не выглядит обрезанным
+  function sbEdges() {
+    const nav = UI.$('#sidebar .sb-nav');
+    if (!nav) return;
+    nav.classList.toggle('more-up', nav.scrollTop > 2);
+    nav.classList.toggle('more-down', nav.scrollTop + nav.clientHeight < nav.scrollHeight - 2);
+  }
+  addEventListener('resize', sbEdges, { passive: true });
   function sideCounts() {
     const c = {};
     const vis = AP.db.orders.filter(AP.orderVisible);
