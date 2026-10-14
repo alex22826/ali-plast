@@ -152,7 +152,12 @@
 
 /* ---------- База ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+/* без системной голубой подсветки при нажатии на телефоне (свойство наследуется — хватает одного правила) */
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+/* взамен — своё короткое затухание в момент касания, только на сенсорных экранах */
+@media (hover: none) {
+  :is(a, button, [data-href], .csel-opt, .switch):active { opacity: .6; transition: opacity 0s; }
+}
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 500 14px/1.5 var(--font-sans);
