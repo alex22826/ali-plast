@@ -133,7 +133,7 @@
     return d;
   };
   UI.kpi = ({ label, value, unit, icon, foot, spark, sparkColor, href, drill, cls = '' }) => html`
-    <div class="card kpi ${href || drill ? 'clickable' : ''} ${cls}" ${href ? raw(`data-href="${href}"`) : ''} ${drill ? raw(`data-drill="${AP.esc(drill)}"`) : ''}>
+    <div class="card kpi ${href || drill ? 'clickable' : ''} ${spark ? 'has-spark' : ''} ${cls}" ${href ? raw(`data-href="${href}"`) : ''} ${drill ? raw(`data-drill="${AP.esc(drill)}"`) : ''}>
       <div class="k-label">${icon ? I(icon) : ''}${label}</div>
       <div class="k-value">${value}${unit ? html`<small>${unit}</small>` : ''}</div>
       ${foot ? html`<div class="k-foot">${foot}</div>` : ''}
@@ -147,6 +147,155 @@
     return html`<span class="delta ${good ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${F.num(Math.abs(d), Math.abs(d) < 10 ? 1 : 0)}%</span>`;
   };
   UI.progress = (f, cls = '', size = '') => html`<div class="progress ${size}"><i class="${cls}" style="width:${Math.max(0, Math.min(100, f * 100)).toFixed(1)}%"></i></div>`;
+  /* сумма со знаком и цветом: приход зелёным «+», расход красным «−» */
+  UI.signed = (v, fmt = F.m) => (Math.abs(v) < 0.5 ? html`<span class="amt-zero">0</span>` : v > 0 ? html`<span class="amt-in">+${fmt(v)}</span>` : html`<span class="amt-out">−${fmt(-v)}</span>`);
+
+  /* ---------- Выпадающий список в стиле сайта ----------
+     Настоящий <select> остаётся в форме (значение, change, FormData), поверх — своя кнопка и меню.
+     На телефоне меню открывается «шторкой» снизу, в длинных списках есть поиск. */
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  const SEL_PROTO = HTMLSelectElement.prototype;
+  let openSel = null;
+  function closeSelect(refocus) {
+    if (!openSel) return;
+    const s = openSel; openSel = null;
+    s.menu.remove(); if (s.scrim) s.scrim.remove();
+    s.wrap.classList.remove('open');
+    s.btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('mousedown', s.out, true);
+    document.removeEventListener('keydown', s.key, true);
+    window.removeEventListener('scroll', s.scroll, true);
+    window.removeEventListener('resize', s.resize);
+    if (refocus) s.btn.focus({ preventScroll: true });
+  }
+  UI.closeSelect = closeSelect;
+  function fieldLabel(wrap) {
+    const f = wrap.closest('.field');
+    const l = f && f.querySelector(':scope > label');
+    if (l) return l.textContent.replace('*', '').trim();
+    const s = wrap.querySelector('select');
+    return (s && (s.dataset.title || s.getAttribute('aria-label'))) || 'Выберите вариант';
+  }
+  function openSelect(sel, wrap, btn) {
+    if (openSel && openSel.sel === sel) return closeSelect(true);
+    closeSelect();
+    if (sel.disabled) return;
+    UI.hideTip();
+    const sheet = matchMedia('(max-width: 720px)').matches;
+    const opts = Array.from(sel.options);
+    const menu = document.createElement('div');
+    menu.className = 'csel-menu' + (sheet ? ' sheet' : '');
+    menu.setAttribute('role', 'listbox');
+    const searchable = opts.length > 8;
+    menu.innerHTML = (sheet ? '<div class="csel-sheet-h"><i></i><b>' + AP.esc(fieldLabel(wrap)) + '</b></div>' : '') + (searchable ? '<div class="csel-search"><input class="input input-sm" placeholder="Поиск…" autocomplete="off"></div>' : '') + '<div class="csel-list"></div>';
+    const list = menu.querySelector('.csel-list');
+    let act = sel.selectedIndex;
+    let shown = [];
+    const draw = (q) => {
+      const s = (q || '').toLowerCase();
+      shown = opts.map((o, i) => [o, i]).filter(([o]) => !s || o.textContent.toLowerCase().includes(s));
+      list.innerHTML = shown.length ? shown.map(([o, i]) => '<div class="csel-opt' + (i === sel.selectedIndex ? ' sel' : '') + (i === act ? ' act' : '') + (o.disabled ? ' off' : '') + '" role="option" data-i="' + i + '" aria-selected="' + (i === sel.selectedIndex) + '"><span>' + AP.esc(o.textContent) + '</span>' + CHECK + '</div>').join('') : '<div class="csel-empty">Ничего не найдено</div>';
+    };
+    draw();
+    document.body.appendChild(menu);
+    let scrim = null;
+    if (sheet) { scrim = document.createElement('div'); scrim.className = 'csel-scrim'; document.body.insertBefore(scrim, menu); scrim.addEventListener('click', () => closeSelect()); }
+    const place = () => {
+      if (sheet) return;
+      const r = wrap.getBoundingClientRect();
+      menu.style.minWidth = r.width + 'px';
+      const below = innerHeight - r.bottom - 10, above = r.top - 10;
+      const h = Math.min(menu.scrollHeight, 340);
+      const up = below < Math.min(h, 220) && above > below;
+      menu.classList.toggle('up', up);
+      menu.style.maxHeight = Math.max(160, Math.min(340, up ? above : below)) + 'px';
+      const mh = Math.min(menu.scrollHeight, parseFloat(menu.style.maxHeight));
+      menu.style.top = (up ? r.top - mh - 6 : r.bottom + 6) + 'px';
+      const w = menu.offsetWidth;
+      menu.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+    };
+    place();
+    const selEl = list.querySelector('.sel');
+    if (selEl) selEl.scrollIntoView({ block: 'nearest' });
+    const choose = (i) => {
+      if (i == null || opts[i].disabled) return;
+      const changed = sel.selectedIndex !== i;
+      sel.selectedIndex = i;
+      closeSelect(!sheet);
+      if (changed) { sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    };
+    list.addEventListener('click', (e) => { const o = e.target.closest('.csel-opt'); if (o) choose(+o.dataset.i); });
+    list.addEventListener('mousemove', (e) => { const o = e.target.closest('.csel-opt'); if (o && +o.dataset.i !== act) { act = +o.dataset.i; list.querySelectorAll('.act').forEach((x) => x.classList.remove('act')); o.classList.add('act'); } });
+    const sInp = menu.querySelector('.csel-search input');
+    if (sInp) { sInp.addEventListener('input', () => { act = -1; draw(sInp.value); if (shown[0]) { act = shown[0][1]; draw(sInp.value); } }); if (!sheet) setTimeout(() => sInp.focus(), 20); }
+    let typed = '', typedT;
+    const s = {
+      sel, wrap, btn, menu, scrim,
+      out: (e) => { if (!menu.contains(e.target) && !wrap.contains(e.target)) closeSelect(); },
+      scroll: (e) => { if (!menu.contains(e.target)) closeSelect(); },
+      resize: () => closeSelect(),
+      key: (e) => {
+        const idx = shown.map(([, i]) => i);
+        const pos = idx.indexOf(act);
+        if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeSelect(true); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); act = idx[Math.max(0, Math.min(idx.length - 1, pos + (e.key === 'ArrowDown' ? 1 : -1)))]; draw(sInp ? sInp.value : ''); const a = list.querySelector('.act'); if (a) a.scrollIntoView({ block: 'nearest' }); return; }
+        if (e.key === 'Enter') { e.preventDefault(); choose(act); return; }
+        if (e.key === 'Tab') { closeSelect(); return; }
+        if (!sInp && e.key.length === 1) { clearTimeout(typedT); typed += e.key.toLowerCase(); typedT = setTimeout(() => (typed = ''), 700); const m = opts.findIndex((o) => o.textContent.toLowerCase().startsWith(typed)); if (m >= 0) { act = m; draw(); const a = list.querySelector('.act'); if (a) a.scrollIntoView({ block: 'nearest' }); } }
+      },
+    };
+    openSel = s;
+    wrap.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    setTimeout(() => { document.addEventListener('mousedown', s.out, true); window.addEventListener('scroll', s.scroll, true); window.addEventListener('resize', s.resize); }, 0);
+    document.addEventListener('keydown', s.key, true);
+  }
+  function buildSelect(sel) {
+    const wrap = document.createElement('div');
+    wrap.className = 'csel' + (sel.classList.contains('input-sm') ? ' sm' : '') + (sel.classList.contains('input-lg') ? ' lg' : '');
+    const st = sel.getAttribute('style');
+    if (st) { wrap.setAttribute('style', st); sel.removeAttribute('style'); }
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    wrap.appendChild(btn);
+    sel.tabIndex = -1;
+    sel.setAttribute('aria-hidden', 'true');
+    const sync = () => {
+      const o = sel.options[sel.selectedIndex];
+      btn.className = 'csel-btn ' + Array.from(sel.classList).filter((x) => /^lvl-/.test(x)).join(' ');
+      btn.innerHTML = '<span>' + AP.esc(o ? o.textContent : '—') + '</span>';
+      btn.disabled = sel.disabled;
+      wrap.classList.toggle('disabled', sel.disabled);
+    };
+    // программная смена значения (select.value = …) тоже обновляет кнопку
+    ['value', 'selectedIndex'].forEach((p) => {
+      const d = Object.getOwnPropertyDescriptor(SEL_PROTO, p);
+      Object.defineProperty(sel, p, { configurable: true, get() { return d.get.call(this); }, set(v) { d.set.call(this, v); sync(); } });
+    });
+    new MutationObserver(sync).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
+    sel.addEventListener('change', sync);
+    btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openSelect(sel, wrap, btn); });
+    btn.addEventListener('keydown', (e) => { if (!openSel && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); openSelect(sel, wrap, btn); } });
+    sel._csel = { sync };
+    sync();
+  }
+  UI.enhanceSelects = (root = document) => UI.$$('select.select', root).forEach((s) => (s._csel ? s._csel.sync() : buildSelect(s)));
+
+  /* таблицы → карточки на телефоне: подписи столбцов берём из шапки */
+  UI.labelTables = (root = document) => UI.$$('table.table:not(.no-stack)', root).forEach((t) => {
+    const hs = UI.$$('thead th', t).map((th) => th.textContent.trim());
+    if (!hs.length) return;
+    UI.$$('tbody tr, tfoot tr', t).forEach((tr) => {
+      let ci = 0;
+      Array.from(tr.children).forEach((td) => { if (td.dataset.label == null) td.dataset.label = td.colSpan > 1 ? '' : hs[ci] || ''; ci += td.colSpan || 1; });
+    });
+    t.classList.add('stackable');
+  });
+  UI.enhance = (root = document) => { UI.enhanceSelects(root); UI.labelTables(root); };
 
   /* ---------- Уведомления ---------- */
   UI.toast = function (title, text, kind = 'ok') {
@@ -166,7 +315,10 @@
     document.body.appendChild(node);
     stack.push(node);
     document.body.style.overflow = 'hidden';
-    const f = node.querySelector('[autofocus], input:not([type=hidden]), select, textarea');
+    UI.enhance(node);
+    // на телефоне не открываем клавиатуру сразу — только по нажатию
+    if (matchMedia('(pointer: coarse)').matches) return;
+    const f = node.querySelector('[autofocus], input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]), textarea');
     if (f) setTimeout(() => f.focus(), 40);
   }
   UI.closeTop = function () {
@@ -230,25 +382,46 @@
     form.onsubmit = (e) => { e.preventDefault(); go(); };
   });
 
-  /* ---------- Подсказка (tooltip) ---------- */
-  let tip;
+  /* ---------- Подсказка (tooltip) в стиле сайта ----------
+     у элементов с data-tip — над элементом со стрелкой (data-tip-pos="right" — справа),
+     у графиков — рядом с курсором */
+  let tip, tipFor = null;
+  const ensureTip = () => { if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); } return tip; };
   function showTip(text, x, y) {
-    if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; document.body.appendChild(tip); }
-    tip.textContent = text; tip.style.display = 'block';
-    const r = tip.getBoundingClientRect();
+    const t = ensureTip();
+    t.className = 'tip on';
+    t.textContent = text;
+    const r = t.getBoundingClientRect();
     let left = x + 14, top = y + 14;
     if (left + r.width > innerWidth - 8) left = x - r.width - 14;
     if (top + r.height > innerHeight - 8) top = y - r.height - 14;
-    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+    t.style.left = left + 'px'; t.style.top = top + 'px';
   }
-  const hideTip = () => { if (tip) tip.style.display = 'none'; };
+  function showTipFor(el) {
+    const t = ensureTip();
+    t.textContent = el.getAttribute('data-tip');
+    const right = el.getAttribute('data-tip-pos') === 'right';
+    t.className = 'tip ' + (right ? 'at-right' : 'at-top');
+    const r = el.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
+    let left, top;
+    if (right) { left = r.right + 10; top = r.top + r.height / 2 - h / 2; }
+    else { left = r.left + r.width / 2 - w / 2; top = r.top - h - 10; if (top < 6) { top = r.bottom + 10; t.className = 'tip'; } }
+    t.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
+    t.style.top = Math.max(6, top) + 'px';
+    requestAnimationFrame(() => t.classList.add('on'));
+  }
+  const hideTip = () => { tipFor = null; if (tip) tip.classList.remove('on'); };
   UI.showTip = showTip; UI.hideTip = hideTip;
-  document.addEventListener('mousemove', (e) => {
-    const t = e.target.closest && e.target.closest('[data-tip]');
-    if (t) showTip(t.getAttribute('data-tip'), e.clientX, e.clientY);
-    else if (!e.target.closest || !e.target.closest('.chart-hover')) hideTip();
+  document.addEventListener('mouseover', (e) => {
+    let el = e.target.closest && e.target.closest('[data-tip]');
+    // подписи разделов в сайдбаре нужны только в узком режиме (планшет), иначе текст и так виден
+    if (el && el.dataset.tipRail && !matchMedia('(min-width: 721px) and (max-width: 1080px)').matches) el = el.parentElement && el.parentElement.closest('[data-tip]:not([data-tip-rail])');
+    if (el && el !== tipFor) { tipFor = el; showTipFor(el); }
+    else if (!el && tipFor) hideTip();
   });
-
+  document.addEventListener('mouseout', (e) => { if (tipFor && !tipFor.contains(e.relatedTarget)) hideTip(); });
+  document.addEventListener('scroll', () => tipFor && hideTip(), true);
+  document.addEventListener('mousedown', () => tipFor && hideTip(), true);
   /* ---------- Графики (SVG, рисуются по ширине контейнера) ---------- */
   const charts = new Map();
   let chartN = 0;

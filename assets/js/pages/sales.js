@@ -78,11 +78,11 @@
         ${UI.pageHead('Заказы', 'Весь путь заказа: от заявки клиента до погрузки. Статус двигается сам — по весам, складу и оплатам.', html`
           <button class="btn btn-secondary" data-x="export">${I('download')}Excel</button>
           ${AP.can('orders', 2) ? html`<button class="btn btn-primary" data-x="new">${I('plus')}Новый заказ</button>` : ''}`)}
-        <div class="pipeline mb-16">${AP.STATUS_ORDER.map((k) => html`<button class="pipe ${q.st === k ? 'on' : ''}" data-st="${k}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].t}</span><b>${counts[k] || 0}</b></button>`)}</div>
+        <div class="pipeline mb-16">${AP.STATUS_ORDER.map((k) => html`<button class="pipe ${q.st === k ? 'on' : ''}" data-st="${k}" data-tip="${AP.STATUSES[k].t}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].s}</span><b>${counts[k] || 0}</b></button>`)}</div>
         <div class="card">
           <div class="card-h" style="padding-bottom:14px">
             <div class="input-icon grow" style="max-width:340px">${I('search')}<input class="input" data-f="q" placeholder="Номер, клиент, продукция…" value="${q.q || ''}"></div>
-            <select class="select" data-f="c" style="max-width:260px">${UI.options(clients.map((c) => [c.id, c.name]), q.c, 'Все клиенты')}</select>
+            <select class="select" data-f="c" aria-label="Клиент" style="max-width:260px">${UI.options(clients.map((c) => [c.id, c.name]), q.c, 'Все клиенты')}</select>
             <label class="switch"><input type="checkbox" data-f="late" ${q.late ? raw('checked') : ''}>Только просроченные</label>
             <div class="seg right"><button class="${q.view !== 'all' ? 'on' : ''}" data-view="">Активные</button><button class="${q.view === 'all' ? 'on' : ''}" data-view="all">Все, включая закрытые</button></div>
           </div>
@@ -265,7 +265,7 @@
     const need = AP.kgOf(p, o.qty) * (1 + (stage === 'extrusion' ? (p.waste + p.defect) / 100 : p.defect / 200));
     const left = Math.max(0, need - (o.progress[stage] || 0));
     const mid = o.route[stage];
-    const ops = AP.db.employees.filter((e) => e.machine === mid);
+    const ops = AP.db.employees.filter((e) => e.machine === mid && e.active !== false);
     const m = UI.modal({
       title: 'Выработка: ' + AP.STAGES[stage].t, sub: o.no + ' · ' + AP.machine(mid).name,
       body: html`<form class="form-grid"><div class="field"><label>Выработано, кг</label><input class="input input-lg" name="kg" type="number" step="0.1" min="0.1" value="${Math.round(left)}"><span class="hint">Осталось по заданию ≈ ${F.kg(left)}</span></div>
@@ -377,7 +377,7 @@
         terms: d.terms, payDays: c.payDays, progress: {}, history: [], k: { power: 1, labor: 1 }, managerId: c.managerId, notes: d.notes || '',
         route: { extrusion: p.workshop === 'w1' ? 'm1' : 'm6', print: 'm8', cut: p.workshop === 'w1' ? 'm3' : p.id === 'p4' ? 'm10' : 'm9', pack: p.workshop === 'w1' ? 'm5' : 'm11' },
         task: null, maket: logo ? { file: file ? file.name : 'maket_' + (1000 + n) + '.pdf', approved: false, sent: new Date().toISOString() } : null,
-        urgent: d.urgent ? { by: AP.user.id, name: AP.user.name, reason: d.urgentReason || 'Решение руководителя', at: new Date().toISOString() } : null,
+        urgent: d.urgent ? { by: AP.user.id, name: AP.user.name, reason: d.urgentReason || 'Решение директора', at: new Date().toISOString() } : null,
       };
       AP.db.orders.push(o);
       AP.audit(from ? 'Создан повторный заказ' : 'Создан заказ', 'order', o.id, o.no + ' · ' + c.name + ' · ' + p.name + (from ? ' · по образцу ' + from.no : ''));
@@ -454,7 +454,7 @@
     const mgr = AP.userById(c.managerId);
     const usual = c.products.map((pid) => AP.product(pid));
     const body = html`
-      ${money && d.overdue ? html`<div class="alert alert-bad mb-16">${I('alert')}<div class="grow"><b>Просрочка оплаты ${d.maxDays} дн. — ${F.money(d.overdue)}</b><small>При оформлении отгрузки программа предупредит; решение принимает руководитель</small></div></div>` : ''}
+      ${money && d.overdue ? html`<div class="alert alert-bad mb-16">${I('alert')}<div class="grow"><b>Просрочка оплаты ${d.maxDays} дн. — ${F.money(d.overdue)}</b><small>При оформлении отгрузки программа предупредит; решение принимает директор</small></div></div>` : ''}
       <div class="grid g-2">
         <div class="card"><div class="card-h"><h3>Реквизиты</h3></div><div class="card-b"><dl class="dl">
           <dt>Тип</dt><dd>${c.type} · ${c.group}</dd>${c.inn ? html`<dt>ИНН</dt><dd>${c.inn}</dd>` : ''}${c.bank ? html`<dt>Банк</dt><dd>${c.bank}</dd><dt>Р/с</dt><dd class="mono">${c.account}</dd>` : ''}
@@ -507,7 +507,7 @@
         <div class="field"><label>Ответственный менеджер</label><select class="select" name="managerId">${UI.options(mgrs.map((u) => [u.id, u.name + ' · ' + u.title]), c.managerId)}</select></div>
         <div class="field"><label>Условия оплаты</label><select class="select" name="terms">${UI.options(Object.entries(TERMS), c.terms)}</select></div>
         <div class="field"><label>Отсрочка, дней</label><input class="input" name="payDays" type="number" min="0" value="${c.payDays}"></div>
-        ${AP.seeMoney() ? html`<div class="field"><label>Лимит долга, сум</label><input class="input" name="limit" type="number" min="0" step="1000000" value="${c.limit}"><span class="hint">При превышении — предупреждение руководителю</span></div>` : ''}
+        ${AP.seeMoney() ? html`<div class="field"><label>Лимит долга, сум</label><input class="input" name="limit" type="number" min="0" step="1000000" value="${c.limit}"><span class="hint">При превышении — предупреждение директору</span></div>` : ''}
         <div class="field"><label>Обычная продукция</label><select class="select" name="product">${UI.options(AP.db.products.map((p) => [p.id, p.name]), c.products[0])}</select></div>
       </form>`,
       foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-primary" data-ok>Сохранить</button>`,

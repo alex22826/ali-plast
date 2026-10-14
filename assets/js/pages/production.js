@@ -32,7 +32,7 @@
     else if (can && st === 'production') btn = stg === 'pack' ? html`<a class="btn btn-primary btn-xs" href="#/scales?order=${o.id}">${I('scale')}К весам</a>` : html`<button class="btn btn-soft btn-xs" data-t="out" data-id="${o.id}">${I('plus')}Выработка</button>`;
     else if (can && !o.task) btn = html`<button class="btn btn-soft btn-xs" data-t="queue" data-id="${o.id}">${I('clipboard')}В очередь</button>`;
     return html`<div class="task ${st === 'production' ? 'now' : ''}" data-act="open-order" data-id="${o.id}">
-      <div class="t-top"><b class="fs-13">${o.no}</b>${AP.statusBadge(st, st === 'production' ? AP.STAGES[stg].short : '')}${o.urgent ? html`<span class="chip urgent" title="${o.urgent.reason}">${I('zap')}срочно</span>` : ''}</div>
+      <div class="t-top"><b class="fs-13">${o.no}</b>${AP.statusBadge(st, st === 'production' ? AP.STAGES[stg].short : '')}${o.urgent ? html`<span class="chip urgent" data-tip="${o.urgent.reason}">${I('zap')}срочно</span>` : ''}</div>
       <div class="t-title">${p.name}</div>
       <div class="t-meta">${AP.client(o.clientId).name} · ${AP.fmtQty(p, o.qty, { kg: true })}</div>
       ${st === 'production' ? html`<div class="mt-8">${UI.progress(done / need, '', 'sm')}</div>` : ''}
@@ -82,7 +82,7 @@
   function defectsTab(q) {
     const per = q.p || 'month';
     const R = AP.periodRange(per);
-    const list = AP.db.defects.filter((x) => AP.inScope(x.workshop) && x.date >= R.from).slice().reverse();
+    const list = AP.db.defects.filter((x) => AP.inScope(x.workshop) && x.date >= R.from).slice().sort((a, b) => (a.at < b.at ? 1 : -1));
     const ws = AP.scope() === 'all' ? ['w1', 'w2'] : [AP.scope()];
     const ext = (w) => AP.sum(AP.db.outputs.filter((x) => x.workshop === w && x.stage === 'extrusion' && x.date >= R.from), 'kg');
     const byReason = AP.groupBy(list.filter((x) => x.kind !== 'waste'), 'reason');
@@ -193,7 +193,7 @@
   function downDialog() {
     const ms = scopedMachines().filter((x) => x.type !== 'pack' && AP.machineState(x.id).s !== 'down');
     const m = UI.modal({
-      title: 'Простой станка', sub: 'Время пойдёт с текущего момента; руководитель получит уведомление, если станок стоит долго',
+      title: 'Простой станка', sub: 'Время пойдёт с текущего момента; директор получит уведомление, если станок стоит долго',
       body: html`<form class="form-grid"><div class="field full"><label>Станок</label><select class="select" name="m">${UI.options(ms.map((x) => [x.id, x.name + ' · ' + AP.wsName(x.workshop)]))}</select></div><div class="field full"><label>Причина</label><select class="select" name="reason">${UI.options(DOWN_REASONS.map((x) => [x, x]))}</select></div></form>`,
       foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-danger" data-ok>${I('pause')}Остановить</button>`,
     });
@@ -283,7 +283,7 @@
       if (r.q.order) { const o = AP.order(r.q.order); if (o) { S.scaleId = list.find((x) => x.workshop === o.workshop)?.id || S.scaleId; S.orderId = o.id; S.op = 'goods'; } }
       if (r.q.op) S.op = r.q.op;
       const sc = list.find((x) => x.id === S.scaleId);
-      sc.online = !AP.offline();
+      sc.online = true; // весы на месте работают и без интернета — пропадает только связь с сервером
       if (sc.workshop === 'sklad') S.op = 'raw';
       else if (S.op === 'raw') S.op = 'goods';
       const orders = S.op === 'goods' ? goodsOrders(sc) : AP.db.orders.filter((o) => AP.orderVisible(o) && o.workshop === sc.workshop && ['production', 'ready'].includes(AP.orderStatus(o)));
@@ -291,18 +291,18 @@
       const o = S.orderId ? AP.order(S.orderId) : null;
       const ex = o && S.op === 'goods' ? expectedGoods(o) : null;
       const sh = nowShift();
-      const ops = AP.db.employees.filter((e) => e.workshop === sc.workshop && (e.machine && AP.machine(e.machine).type === 'pack' || /Упаков|Мастер|Кладов/.test(e.position)));
+      const ops = AP.db.employees.filter((e) => e.active !== false && e.workshop === sc.workshop && (e.machine && AP.machine(e.machine).type === 'pack' || /Упаков|Мастер|Кладов/.test(e.position)));
       const wl = weighList(sc);
       const mats = AP.db.materials.filter((m) => m.unit === 'кг');
       return html`
         ${UI.pageHead('Весы', 'Вес попадает в программу сам, как только стабилизировался. Ручной ввод — только с правом и комментарием.', html`
           ${list.length > 1 ? html`<div class="seg">${list.map((x) => html`<button class="${x.id === sc.id ? 'on' : ''}" data-scale="${x.id}">${x.name.replace(' · платформенные', '').replace(' · паллетные', '')}</button>`)}</div>` : ''}
-          <label class="switch" title="Демо: что будет, если пропадёт интернет"><input type="checkbox" data-x="offline" ${AP.offline() ? raw('checked') : ''}>Нет связи с сервером</label>`)}
+          <label class="switch" data-tip="Демо: что будет, если пропадёт интернет"><input type="checkbox" data-x="offline" ${AP.offline() ? raw('checked') : ''}>Нет связи с сервером</label>`)}
         ${AP.offline() ? html`<div class="alert alert-warn mb-16">${I('wifiOff')}<div class="grow"><b>Работаем без связи</b><small>Весы и этикетки продолжают работать. Взвешивания сохраняются на месте (${AP.pendingSync()} в очереди) и догрузятся в общую базу, когда связь вернётся.</small></div></div>` : ''}
         <div class="grid g-21">
           <div class="stack">
             <div class="scale-display">
-              <div class="sd-top"><span class="chip" style="background:rgba(255,255,255,.08);color:#fff">${I('scale')}${sc.name}</span><span>${sc.link}</span><span>Макс ${F.num(sc.max)} кг · d = ${F.num(sc.d, 2)} кг</span><span class="right">${SHIFT[sh]}</span></div>
+              <div class="sd-top"><span class="chip" style="background:rgba(255,255,255,.08);color:#fff">${I('scale')}${sc.name}</span>${AP.offline() ? html`<span class="chip" style="background:rgba(251,191,36,.14);color:#FBBF24">${I('wifiOff')}сервер недоступен — сохраняем на месте</span>` : ''}<span>${sc.link}</span><span>Макс ${F.num(sc.max)} кг · d = ${F.num(sc.d, 2)} кг</span><span class="right">${SHIFT[sh]}</span></div>
               <div class="sd-val"><span id="scaleVal">0,00</span><small>кг</small></div>
               <span class="sd-state zero" id="scaleState">НОЛЬ</span>
               <div class="sd-bars" id="scaleBars"></div>

@@ -7,8 +7,8 @@
   <meta name="description" content="Дизайн-система CHIRCHIQ ALI PLAST: цвета, шрифты, кнопки, формы, сайдбар, разделы и компоненты.">
   <meta name="theme-color" content="#0B1120">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="assets/css/app.css?v=1">
-  <script>try { var t = localStorage.getItem('ap.theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <link rel="stylesheet" href="assets/css/app.css?v=2">
+  <script>(function () { var h = new Date().getHours(), t = h >= 8 && h < 18 ? 'light' : 'dark'; try { var o = JSON.parse(localStorage.getItem('ap.themeOverride') || 'null'); if (o && o.until > Date.now()) t = o.theme; } catch (e) {} document.documentElement.setAttribute('data-theme', t); })();</script>
   <style>
     .sg-top { position: sticky; top: 0; z-index: 30; background: var(--ink-900); color: #fff; }
     .sg-top::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: var(--iris); }
@@ -50,9 +50,9 @@
 </head>
 <body>
   <script src="assets/js/vendor/qrcode.js"></script>
-  <script src="assets/js/core.js?v=1"></script>
-  <script src="assets/js/ui.js?v=1"></script>
-  <script src="assets/js/app.js?v=1"></script>
-  <script src="assets/js/styleguide.js?v=1"></script>
+  <script src="assets/js/core.js?v=2"></script>
+  <script src="assets/js/ui.js?v=2"></script>
+  <script src="assets/js/app.js?v=2"></script>
+  <script src="assets/js/styleguide.js?v=2"></script>
 </body>
 </html>

@@ -10,9 +10,35 @@
   AP.pages = {};
   AP.page = (key, def) => (AP.pages[key] = def);
 
-  /* ---------- Тема ---------- */
+  /* ---------- Тема: сама — тёмная с 18:00, светлая с 8:00; вручную — до следующего переключения ---------- */
+  const OVR = 'ap.themeOverride';
   AP.theme = () => document.documentElement.getAttribute('data-theme') || 'light';
-  AP.setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('ap.theme', t); } catch (e) { /* без хранилища — тема на сессию */ } };
+  AP.themeAuto = (d = new Date()) => (d.getHours() >= 8 && d.getHours() < 18 ? 'light' : 'dark');
+  AP.nextThemeSwitch = (d = new Date()) => { const t = new Date(d), h = d.getHours(); if (h < 8) t.setHours(8, 0, 0, 0); else if (h < 18) t.setHours(18, 0, 0, 0); else { t.setDate(t.getDate() + 1); t.setHours(8, 0, 0, 0); } return t.getTime(); };
+  AP.themeWanted = () => { try { const o = JSON.parse(localStorage.getItem(OVR) || 'null'); if (o && o.until > Date.now()) return o.theme; } catch (e) { /* без хранилища — по времени */ } return AP.themeAuto(); };
+  AP.themeTip = () => (AP.theme() === 'dark' ? 'Тёмная тема' : 'Светлая тема') + (AP.theme() === AP.themeAuto() ? ' · по времени' : ' · вручную до ' + (AP.themeAuto() === 'light' ? '18:00' : '8:00')) + '\nСама: тёмная с 18:00, светлая с 8:00';
+  AP.applyTheme = function (t, origin) {
+    const root = document.documentElement;
+    if (AP.theme() === t) return;
+    const flip = () => {
+      root.setAttribute('data-theme', t);
+      document.querySelectorAll('[data-act=theme], [data-theme-toggle]').forEach((b) => { b.innerHTML = String(I(t === 'dark' ? 'sun' : 'moon')); b.setAttribute('data-tip', AP.themeTip()); });
+    };
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (document.startViewTransition && !reduce) {
+      // «волна» новой темы расходится от кнопки (или сверху, если тема сменилась по времени)
+      const x = origin ? origin.x : innerWidth / 2, y = origin ? origin.y : 0;
+      const R = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      const vt = document.startViewTransition(flip);
+      vt.ready.then(() => root.animate({ clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + R + 'px at ' + x + 'px ' + y + 'px)'] }, { duration: origin ? 700 : 1200, easing: 'cubic-bezier(.4, 0, .2, 1)', pseudoElement: '::view-transition-new(root)' })).catch(() => {});
+    } else { root.classList.add('theme-fade'); flip(); setTimeout(() => root.classList.remove('theme-fade'), 700); }
+  };
+  AP.toggleTheme = function (origin) {
+    const t = AP.theme() === 'dark' ? 'light' : 'dark';
+    try { if (t === AP.themeAuto()) localStorage.removeItem(OVR); else localStorage.setItem(OVR, JSON.stringify({ theme: t, until: AP.nextThemeSwitch() })); } catch (e) { /* без хранилища */ }
+    AP.applyTheme(t, origin);
+  };
+  AP.startThemeClock = () => setInterval(() => { const w = AP.themeWanted(); if (w !== AP.theme()) AP.applyTheme(w); }, 30000);
 
   /* ---------- Маршрут ---------- */
   AP.route = function () {
@@ -42,6 +68,8 @@
           <main class="content" id="view"></main>
         </div>
       </div>
+      <nav class="bnav" id="bnav" aria-label="Быстрые разделы"></nav>
+      <div id="routebar"></div>
       <div class="nav-scrim" data-act="nav-close"></div>`);
   }
 
@@ -58,14 +86,14 @@
     const fixed = AP.userWorkshop();
     const scope = AP.scope();
     const scopeBox = fixed !== 'all'
-      ? html`<div class="sb-scope"><div class="lock"><i style="background:var(--${fixed})"></i>${AP.wsName(fixed)}<span class="right muted fs-12" style="color:var(--ink-300)">только свой цех</span></div></div>`
-      : html`<div class="sb-scope" role="group" aria-label="Цех">${[['all', 'Все цеха'], ['w1', 'Цех №1'], ['w2', 'Цех №2']].map(([k, t]) => html`<button class="${scope === k ? 'on' : ''}" data-act="scope" data-v="${k}">${t}</button>`)}</div>`;
+      ? html`<div class="sb-scope"><div class="lock" data-tip="Начальник цеха видит только свой цех" data-tip-pos="right"><i style="background:var(--${fixed})"></i><b class="full">${AP.wsName(fixed)}</b><b class="short">${AP.workshop(fixed).short}</b><span class="right muted fs-12" style="color:var(--ink-300)">только свой цех</span></div></div>`
+      : html`<div class="sb-scope" role="group" aria-label="Цех">${[['all', 'Все цеха', 'Все'], ['w1', 'Цех №1', 'Ц1'], ['w2', 'Цех №2', 'Ц2']].map(([k, t, sh]) => html`<button class="${scope === k ? 'on' : ''}" data-act="scope" data-v="${k}"><span class="full">${t}</span><span class="short">${sh}</span></button>`)}</div>`;
     UI.$('#sidebar').innerHTML = String(html`
       <a class="sb-brand" href="#/${AP.homeKey()}">${UI.logoMark(38)}<span><b>ALI PLAST</b><small>Chirchiq · учёт</small></span></a>
       ${scopeBox}
       <nav class="sb-nav">${groups.map((g) => html`<div class="sb-group"><span>${g.name}</span>${g.items.map((s) => html`
-        <a class="sb-link ${active === s.key ? 'active' : ''}" href="#/${s.key}">${I(s.icon)}<span>${s.title}</span>${s.directorOnly ? html`<span class="sb-lock" title="Только главный руководитель">${I('lock', 'sb-lock')}</span>` : counts[s.key] ? html`<span class="sb-count ${counts[s.key].bad ? 'bad' : ''}">${counts[s.key].n}</span>` : ''}</a>`)}</div>`)}</nav>
-      <div class="sb-user">${UI.avatar(u.name, u.id)}<div class="who"><b>${u.name}</b><small>${u.title}</small></div><button class="btn btn-icon btn-sm" data-act="logout" title="Выйти">${I('logout')}</button></div>`);
+        <a class="sb-link ${active === s.key ? 'active' : ''}" href="#/${s.key}" data-tip="${s.title}" data-tip-pos="right" data-tip-rail="1">${I(s.icon)}<span>${s.title}</span>${s.directorOnly ? html`<span class="sb-lock" data-tip="Только директор" data-tip-pos="right">${I('lock', 'sb-lock')}</span>` : counts[s.key] ? html`<span class="sb-count ${counts[s.key].bad ? 'bad' : ''}">${counts[s.key].n}</span>` : ''}</a>`)}</div>`)}</nav>
+      <div class="sb-user">${UI.avatar(u.name, u.id)}<div class="who"><b>${u.name}</b><small>${u.title}</small></div><button class="btn btn-icon btn-sm" data-act="logout" data-tip="Выйти" data-tip-pos="right" aria-label="Выйти">${I('logout')}</button></div>`);
   }
   function sideCounts() {
     const c = {};
@@ -91,10 +119,22 @@
       <div class="crumbs"><small>${sec ? sec.group : ''}</small><b>${title}</b></div>
       <div class="spacer"></div>
       <label class="tb-search input-icon">${I('search')}<input class="input" id="gsearch" placeholder="Заказ, клиент или QR (AP-000123)" autocomplete="off"><kbd>/</kbd></label>
-      <span class="conn ${off ? 'off' : ''}" title="${off ? 'Нет связи: взвешивания сохраняются на месте и догрузятся позже' : 'Весы и сканеры на связи'}"><i></i><span>${off ? 'Офлайн · ' + AP.pendingSync() + ' в очереди' : 'Весы на связи'}</span></span>
-      <button class="btn btn-icon bell" data-act="alerts" title="Уведомления">${I('bell')}${alerts.length ? html`<span class="dot">${alerts.length > 99 ? '99+' : alerts.length}</span>` : ''}</button>
-      <button class="btn btn-icon" data-act="theme" title="Тема">${I(AP.theme() === 'dark' ? 'sun' : 'moon')}</button>`);
+      <button class="btn btn-icon tb-find" data-act="search" aria-label="Поиск">${I('search')}</button>
+      <span class="conn ${off ? 'off' : ''}" data-tip="${off ? 'Нет связи: взвешивания сохраняются на месте и догрузятся позже' : 'Весы и сканеры на связи'}"><i></i><span>${off ? 'Офлайн · ' + AP.pendingSync() + ' в очереди' : 'Весы на связи'}</span></span>
+      <button class="btn btn-icon bell" data-act="alerts" data-tip="Уведомления" aria-label="Уведомления">${I('bell')}${alerts.length ? html`<span class="dot">${alerts.length > 99 ? '99+' : alerts.length}</span>` : ''}</button>
+      <button class="btn btn-icon" data-act="theme" data-tip="${AP.themeTip()}" aria-label="Сменить тему">${I(AP.theme() === 'dark' ? 'sun' : 'moon')}</button>`);
   }
+
+  /* ---------- Нижняя навигация на телефоне ---------- */
+  const BNAV = { director: ['dashboard', 'orders', 'production', 'findash'], shop: ['dashboard', 'scales', 'production', 'qr'], operator: ['scales', 'qr'], storekeeper: ['dashboard', 'warehouse', 'stock', 'qr'], sales: ['dashboard', 'orders', 'clients', 'debts'], accountant: ['dashboard', 'money', 'debts', 'reports'] };
+  const SHORT = { dashboard: 'Сводка', findash: 'Финансы', orders: 'Заказы', clients: 'Клиенты', production: 'Цех', scales: 'Весы', qr: 'QR', stock: 'Сырьё', warehouse: 'Склад', money: 'Касса', debts: 'Долги', cost: 'Себест.', staff: 'Люди', reports: 'Отчёты', refs: 'Справ.', users: 'Права', audit: 'Журнал' };
+  function bnav(active, counts) {
+    const pref = (BNAV[AP.user.role] || []).filter((k) => AP.can(k));
+    const items = pref.concat(AP.SECTIONS.map((s) => s.key).filter((k) => AP.can(k) && !pref.includes(k))).slice(0, 4);
+    UI.$('#bnav').innerHTML = String(html`<div style="display:contents">${items.map((k) => html`<a href="#/${k}" class="${k === active ? 'on' : ''}">${I(AP.SECTIONS.find((s) => s.key === k).icon)}<span>${SHORT[k]}</span>${counts[k] ? html`<span class="cnt">${counts[k].n}</span>` : ''}</a>`)}<button type="button" data-act="nav-open" class="${items.includes(active) ? '' : 'on'}">${I('menu')}<span>Меню</span></button></div>`);
+  }
+  let lastKey = null;
+  function routeBar() { const b = UI.$('#routebar'); if (!b) return; b.classList.remove('go'); void b.offsetWidth; b.classList.add('go'); }
 
   /* ---------- Отрисовка страницы ---------- */
   AP.render = function () {
@@ -104,16 +144,22 @@
     const sec = AP.SECTIONS.find((s) => s.key === key);
     const page = AP.pages[key];
     sidebar(key);
+    bnav(key, sideCounts());
     const view = UI.$('#view');
+    const changed = key !== lastKey;
+    lastKey = key;
+    if (changed) routeBar();
     if (!AP.can(key)) {
       topbar(sec, sec ? sec.title : '');
-      view.innerHTML = String(lockedView(key));
+      view.innerHTML = String(html`<div class="page ${changed ? 'enter' : ''}">${lockedView(key)}</div>`);
       return;
     }
     const title = typeof page.title === 'function' ? page.title(r) : page.title || (sec && sec.title);
     topbar(sec, title);
     // свежий контейнер на каждую отрисовку — обработчики страниц не накапливаются
-    view.innerHTML = String(html`<div class="page">${page.render(r)}</div>`);
+    // при переходе в другой раздел — плавное появление блоков, при фильтрах и вкладках — без анимации
+    view.innerHTML = String(html`<div class="page ${changed ? 'enter' : ''}">${page.render(r)}</div>`);
+    UI.enhance(view);
     if (page.mount) page.mount(view.firstElementChild, r);
     UI.drawCharts(view);
     document.title = title + ' · ALI PLAST';
@@ -121,7 +167,7 @@
   function lockedView(key) {
     const fin = key === 'findash';
     return html`<div class="locked"><div><div class="ic">${I('lock')}</div><h2>${fin ? 'Финансовый дашборд закрыт' : 'Нет доступа к разделу'}</h2>
-      <p>${fin ? 'По ТЗ (п. 4.11) общий финансовый дашборд виден только главному руководителю. Выдать на него права нельзя.' : 'Права на этот раздел выдаёт главный руководитель в разделе «Пользователи и права».'}</p>
+      <p>${fin ? 'По ТЗ (п. 4.11) общий финансовый дашборд виден только директору. Выдать на него права нельзя.' : 'Права на этот раздел выдаёт директор в разделе «Пользователи и права».'}</p>
       <a class="btn btn-primary mt-16" href="#/${AP.homeKey()}">${I('arrowLeft')}На главную</a></div></div>`;
   }
 
@@ -182,6 +228,19 @@
     UI.toast('Ничего не найдено', q, 'warn');
   }
 
+  function searchModal() {
+    const m = UI.modal({
+      title: 'Поиск', sub: 'Номер заказа, клиент или код с этикетки',
+      body: html`<div class="input-icon">${I('search')}<input class="input input-lg" id="msearch" placeholder="ЗК-1056, Fresh Market, AP-000123" autocomplete="off" enterkeyhint="search"></div>${AP.can('qr') ? html`<a class="btn btn-secondary btn-block mt-12" href="#/qr">${I('scan')}Сканировать QR-код</a>` : ''}`,
+      foot: html`<button class="btn btn-ghost" data-close>Закрыть</button><button class="btn btn-primary" data-go>${I('search')}Найти</button>`,
+    });
+    const inp = m.querySelector('#msearch');
+    setTimeout(() => inp.focus(), 80);
+    const go = () => { const v = inp.value; UI.closeTop(); globalSearch(v); };
+    m.querySelector('[data-go]').onclick = go;
+    inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  }
+
   function bindGlobal() {
     document.addEventListener('click', (e) => {
       const a = e.target.closest('[data-act]');
@@ -189,7 +248,8 @@
       if (a) {
         const act = a.dataset.act;
         if (act === 'logout') { AP.logout(); location.replace('index.html'); }
-        else if (act === 'theme') { AP.setTheme(AP.theme() === 'dark' ? 'light' : 'dark'); AP.render(); }
+        else if (act === 'theme') { const r = a.getBoundingClientRect(); UI.hideTip(); AP.toggleTheme({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); }
+        else if (act === 'search') searchModal();
         else if (act === 'scope') { AP.setScope(a.dataset.v); AP.render(); }
         else if (act === 'alerts') { e.stopPropagation(); alertsPop(a); }
         else if (act === 'nav-open') document.body.classList.add('nav-open');
@@ -212,7 +272,7 @@
       if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { const s = UI.$('#gsearch'); if (s) { e.preventDefault(); s.focus(); } }
       if (e.key === 'Enter' && e.target.id === 'gsearch') globalSearch(e.target.value);
     });
-    addEventListener('hashchange', () => { UI.closeAll(); AP._drawer = null; AP.render(); window.scrollTo(0, 0); });
+    addEventListener('hashchange', () => { UI.closeAll(); UI.closeSelect(); document.body.classList.remove('nav-open'); AP._drawer = null; AP.render(); window.scrollTo(0, 0); });
     // если данные поменяли в другой вкладке — перечитываем
     addEventListener('storage', (e) => { if (e.key === 'ap.db.v1' && e.newValue) { AP.load(); AP.user = AP.currentUser(); if (!AP.user) location.replace('index.html'); else AP.render(); } });
   }
@@ -252,7 +312,7 @@
         const p = AP.product(o.productId), st = AP.orderStatus(o), od = AP.isOverdue(o);
         const stage = st === 'production' ? AP.STAGES[AP.currentStage(o)].short : '';
         return html`<tr class="click ${od ? 'row-bad' : ''}" data-act="open-order" data-id="${o.id}">
-          <td><span class="cell-title">${o.no}</span>${o.urgent ? html` <span class="chip urgent" title="${o.urgent.reason}">срочно</span>` : ''}<span class="cell-sub">${F.date(o.date)}</span></td>
+          <td><span class="cell-title">${o.no}</span>${o.urgent ? html` <span class="chip urgent" data-tip="${o.urgent.reason}">срочно</span>` : ''}<span class="cell-sub">${F.date(o.date)}</span></td>
           <td><span class="cell-title">${AP.client(o.clientId).name}</span><span class="cell-sub">${UI.wsChip(o.workshop)}</span></td>
           <td><span class="fw-7">${p.name}</span><span class="cell-sub">${o.material} · ${o.thick} мкм · ${o.color}${o.logo ? ' · логотип ' + o.inks.length + ' цв.' : ''}</span></td>
           <td class="r nowrap"><b>${p.base === 'кг' ? F.kg(o.qty) : F.num(o.qty)}</b><span class="cell-sub">${p.base === 'кг' ? F.num(AP.unitsCount(p, o.qty)) + ' рул.' : F.kg(AP.kgOf(p, o.qty))}</span></td>
@@ -266,7 +326,8 @@
 
   /* ---------- Запуск ---------- */
   AP.boot = function () {
-    try { const t = localStorage.getItem('ap.theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) { /* нет хранилища */ }
+    document.documentElement.setAttribute('data-theme', AP.themeWanted());
+    AP.startThemeClock();
     AP.load();
     AP.user = AP.currentUser();
     if (!AP.user) { location.replace('index.html'); return; }

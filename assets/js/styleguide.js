@@ -6,6 +6,7 @@
   const I = UI.icon;
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
+  AP.SG_CLIENTS = ['ООО «Tashkent Savdo Group»', 'ООО «Chirchiq Non»', 'ООО «Fresh Market»', 'ИП Абдуллаев Р. (рынок «Чорсу»)', 'ООО «Silk Road Food»', 'ООО «Bahor Textile»', 'ООО «Navruz Pharm»', 'ООО «Green Box Logistics»', 'ЧП «Mirzo Plast Savdo»', 'ООО «Samarqand Agro Export»', 'ООО «Olmaliq Meva»'];
   const SECTIONS = [['brand', 'Бренд'], ['colors', 'Цвета'], ['type', 'Шрифты'], ['buttons', 'Кнопки'], ['forms', 'Формы'], ['badges', 'Статусы'], ['cards', 'Карточки'], ['tables', 'Таблицы'], ['charts', 'Графики'], ['sidebar', 'Сайдбар'], ['sections', 'Разделы и доступы'], ['shop', 'Цех и весы'], ['icons', 'Иконки']];
   const sec = (id, n, title, lead, body) => html`<section class="sg-sec" id="${id}"><h2><span>${String(n).padStart(2, '0')}</span>${title}</h2>${lead ? html`<p class="lead">${lead}</p>` : ''}${body}</section>`;
   const sw = (name, token, note) => html`<div class="sw"><i style="background:var(${token})"></i><div><b>${name}</b><code data-tok="${token}">${token}</code>${note ? html`<div class="fs-12 muted" style="padding:0">${note}</div>` : ''}</div></div>`;
@@ -30,7 +31,7 @@
     return html`
       <header class="sg-top"><div class="sg-bar">${UI.logoMark(34)}<span><b>ALI PLAST · UI-кит</b><small>Дизайн-система учёта производства</small></span>
         <span class="grow"></span><a class="btn btn-sm btn-dark" style="border-color:rgba(255,255,255,.12)" href="index.html">${I('arrowLeft')}Ко входу</a>
-        <button class="btn btn-sm btn-icon" style="color:#fff" data-theme-toggle title="Светлая / тёмная тема">${I('moon')}</button></div>
+        <button class="btn btn-sm btn-icon" style="color:#fff" data-theme-toggle data-tip-pos="right" aria-label="Сменить тему">${I('moon')}</button></div>
         <nav class="sg-nav">${SECTIONS.map(([id, t]) => html`<a href="#${id}">${t}</a>`)}</nav></header>
       <main class="sg-main">
         <div class="sg-hero"><div><span class="badge b-dark plain">CHIRCHIQ ALI PLAST</span><h1 class="mt-12">Плёнка, цифры и порядок</h1>
@@ -45,7 +46,7 @@
             <div class="card"><div class="card-b"><div style="height:56px;border-radius:12px;background:var(--iris)"></div><div class="spec mt-8">--iris: #7FE7F2 → #8FA9FF → #C6A2FF → #FFB4DB</div></div></div>
           </div>`)}
 
-        ${sec('colors', 2, 'Цвета', 'Токены из assets/css/app.css. В тёмной теме у каждого свой шаг — коды ниже пересчитываются при переключении темы.', html`${COLORS.map(([g, list]) => html`<h3 class="mt-16 mb-12">${g}</h3><div class="swatches">${list.map(([n, t]) => sw(n, t))}</div>`)}`)}
+        ${sec('colors', 2, 'Цвета', 'Токены из assets/css/app.css. Тема меняется сама: тёмная с 18:00, светлая с 8:00 (вручную — до следующего переключения). В тёмной теме у каждого цвета свой шаг; все тексты и метки проверены на контраст не ниже 4,5:1 — коды ниже пересчитываются при смене темы.', html`${COLORS.map(([g, list]) => html`<h3 class="mt-16 mb-12">${g}</h3><div class="swatches">${list.map(([n, t]) => sw(n, t))}</div>`)}`)}
 
         ${sec('type', 3, 'Шрифты', 'Три гарнитуры с кириллицей, лежат локально в assets/fonts (не зависят от Google Fonts).', html`<div class="card"><div class="card-b">
           <div class="type-row"><div><b>Unbounded</b><div class="spec">заголовки · 600 / 700</div></div><div style="font:600 34px/1.1 var(--font-display);letter-spacing:-.02em">Заказ ЗК-1056 в производстве</div></div>
@@ -66,7 +67,7 @@
 
         ${sec('forms', 5, 'Формы', 'Подпись над полем, подсказка под ним. Ошибка — красная рамка и текст, а не только цвет. Обязательные поля — со звёздочкой.', html`<div class="grid g-2">
           <div class="card"><div class="card-b"><div class="form-grid">
-            <div class="field"><label>Клиент <span class="req">*</span></label><select class="select"><option>ООО «Fresh Market»</option></select></div>
+            <div class="field"><label>Клиент <span class="req">*</span></label><select class="select">${AP.SG_CLIENTS.map((x, i) => html`<option ${i === 2 ? raw('selected') : ''}>${x}</option>`)}</select><span class="hint">Свой список: поиск, если пунктов больше 8; на телефоне — «шторка» снизу</span></div>
             <div class="field"><label>Тираж <span class="req">*</span></label><div class="input-group"><input class="input" value="120000"><span class="addon">шт</span></div><span class="hint">120 000 шт · 1 176 кг · 60 коробок</span></div>
             <div class="field"><label>Поиск</label><div class="input-icon">${I('search')}<input class="input" placeholder="Номер, клиент…"></div></div>
             <div class="field"><label>Срок</label><input class="input" type="date" value="2026-10-24"></div>
@@ -85,15 +86,15 @@
             <label class="switch"><input type="checkbox" disabled>Выключено правами</label>
             <div class="divider"></div>
             <div class="alert alert-info">${I('info')}<div class="grow"><b>Списание сработает автоматически</b><small>Гранулят и мастербатч — по рецептуре при выпуске плёнки</small></div></div>
-            <div class="alert alert-ok">${I('check')}<div class="grow"><b>Отгрузка разрешена руководителем</b></div></div>
+            <div class="alert alert-ok">${I('check')}<div class="grow"><b>Отгрузка разрешена директором</b></div></div>
             <div class="alert alert-warn">${I('alert')}<div class="grow"><b>Не хватает: Мастербатч синий</b><small>Будет сформирована заявка на закупку</small></div></div>
-            <div class="alert alert-bad">${I('alert')}<div class="grow"><b>У клиента просроченный долг</b><small>Решение об отгрузке принимает руководитель</small></div></div>
-            <div class="row"><button class="btn btn-secondary btn-sm" data-toast="ok">Тост: успех</button><button class="btn btn-secondary btn-sm" data-toast="warn">Тост: внимание</button><button class="btn btn-secondary btn-sm" data-modal>Модальное окно</button><button class="btn btn-secondary btn-sm" data-drawer>Боковая карточка</button></div>
+            <div class="alert alert-bad">${I('alert')}<div class="grow"><b>У клиента просроченный долг</b><small>Решение об отгрузке принимает директор</small></div></div>
+            <div class="row"><button class="btn btn-secondary btn-sm" data-tip="Подсказка в стиле сайта — вместо системной">Наведите — подсказка</button><button class="btn btn-secondary btn-sm" data-toast="ok">Тост: успех</button><button class="btn btn-secondary btn-sm" data-toast="warn">Тост: внимание</button><button class="btn btn-secondary btn-sm" data-modal>Модальное окно</button><button class="btn btn-secondary btn-sm" data-drawer>Боковая карточка</button></div>
           </div></div></div>`)}
 
         ${sec('badges', 6, 'Статусы и метки', 'Статусы заказа меняются сами — по весам, складу и оплатам. Каждый статус — точка + текст, цвет не единственный признак.', html`<div class="card"><div class="card-b stack">
           <div class="demo">${statuses.map((s) => AP.statusBadge(s))}</div>
-          <div class="demo">${UI.wsChip('w1')}${UI.wsChip('w2')}${UI.wsChip('sklad')}${UI.wsChip(null)}<span class="chip urgent">${I('zap')}срочно</span><span class="chip ghost mono">AP-002889</span><span class="badge b-dark plain">${I('lock', 'icon-16')}только для руководителя</span></div>
+          <div class="demo">${UI.wsChip('w1')}${UI.wsChip('w2')}${UI.wsChip('sklad')}${UI.wsChip(null)}<span class="chip urgent">${I('zap')}срочно</span><span class="chip ghost mono">AP-002889</span><span class="badge b-dark plain">${I('lock', 'icon-16')}только для директора</span></div>
           <div class="demo"><span class="delta up">▲ 12%</span><span class="delta down">▼ 4,5%</span><span class="delta flat">0%</span><span class="badge b-teal sm">${I('recycle', 'icon-16')}на переработку</span><span class="badge b-warn sm">вес вручную</span><span class="badge b-warn sm">в очереди</span>
             ${Object.keys(AP.PAY).map((k) => html`<span class="row nowrap" style="gap:6px;font-weight:700"><i class="dot" style="background:${AP.PAY[k].c}"></i>${AP.PAY[k].t}</span>`)}</div>
           <div style="max-width:420px" class="stack"><div>${UI.progress(0.35)}</div><div>${UI.progress(1, 'ok')}</div><div>${UI.progress(0.85, 'warn', 'lg')}</div></div>
@@ -131,14 +132,14 @@
           <aside class="sidebar"><a class="sb-brand" href="#sidebar">${UI.logoMark(38)}<span><b>ALI PLAST</b><small>Chirchiq · учёт</small></span></a>
             <div class="sb-scope"><button class="on">Все цеха</button><button>Цех №1</button><button>Цех №2</button></div>
             <nav class="sb-nav">${[['Главное', [['home', 'Сводка', 1], ['chart', 'Финансовый дашборд', 0, 'lock']]], ['Продажи', [['clipboard', 'Заказы', 0, 4], ['users', 'Клиенты']]], ['Производство', [['factory', 'Производство', 0, 6], ['scale', 'Весы'], ['qr', 'QR-коды']]], ['Склад', [['layers', 'Склад сырья', 0, '!2'], ['truck', 'Склад ГП и погрузка']]]].map(([g, items]) => html`<div class="sb-group"><span>${g}</span>${items.map(([ic, t, on, extra]) => html`<a class="sb-link ${on ? 'active' : ''}" href="#sidebar">${I(ic)}<span>${t}</span>${extra === 'lock' ? I('lock', 'sb-lock') : extra ? html`<span class="sb-count ${String(extra)[0] === '!' ? 'bad' : ''}">${String(extra).replace('!', '')}</span>` : ''}</a>`)}</div>`)}</nav>
-            <div class="sb-user">${UI.avatar('Алишер Юсупов', 'u1')}<div class="who"><b>Алишер Юсупов</b><small>Главный руководитель</small></div><button class="btn btn-icon btn-sm">${I('logout')}</button></div></aside>
+            <div class="sb-user">${UI.avatar('Алишер Юсупов', 'u1')}<div class="who"><b>Алишер Юсупов</b><small>Директор</small></div><button class="btn btn-icon btn-sm">${I('logout')}</button></div></aside>
           <div class="demo-main"><header class="topbar"><div class="crumbs"><small>Главное</small><b>Сводка</b></div><div class="spacer"></div><label class="tb-search input-icon">${I('search')}<input class="input" placeholder="Заказ, клиент или QR"><kbd>/</kbd></label><span class="conn"><i></i><span>Весы на связи</span></span><button class="btn btn-icon bell">${I('bell')}<span class="dot">14</span></button></header>
             <div class="content">${UI.pageHead('Заголовок раздела', 'Короткое пояснение, что здесь делают и откуда берутся цифры.', html`<button class="btn btn-secondary">${I('download')}Excel</button><button class="btn btn-primary">${I('plus')}Действие</button>`)}
               ${UI.tabs([['a', 'Очередь заданий', 6], ['b', 'Выработка'], ['c', 'Брак и отходы'], ['d', 'Простои', 1]], 'a')}
-              <div class="pipeline" style="grid-template-columns:repeat(5,minmax(0,1fr))">${AP.STATUS_ORDER.slice(0, 5).map((k, i) => html`<button class="pipe ${i === 4 ? 'on' : ''}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].t}</span><b>${[2, 1, 1, 2, 4][i]}</b></button>`)}</div></div></div>
+              <div class="pipeline" style="grid-template-columns:repeat(5,minmax(0,1fr))">${AP.STATUS_ORDER.slice(0, 5).map((k, i) => html`<button class="pipe ${i === 4 ? 'on' : ''}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].s}</span><b>${[2, 1, 1, 2, 4][i]}</b></button>`)}</div></div></div>
         </div>`)}
 
-        ${sec('sections', 11, 'Разделы и кому они доступны', 'По ТЗ (раздел 2) на старте нужны три учётные записи: главный руководитель и два начальника цеха. Остальные роли заведены, но выключены — включаются без переделки программы. Финансовый дашборд — только главный руководитель, выдать на него права нельзя.', html`<div class="card"><div class="table-wrap"><table class="table compact matrix"><thead><tr><th>Раздел</th>${ROLE_COLS.map(([, t]) => html`<th>${t}</th>`)}</tr></thead><tbody>
+        ${sec('sections', 11, 'Разделы и кому они доступны', 'По ТЗ (раздел 2) на старте нужны три учётные записи: директор и два начальника цеха. Остальные роли заведены, но выключены — включаются без переделки программы. Финансовый дашборд — только директор, выдать на него права нельзя.', html`<div class="card"><div class="table-wrap"><table class="table compact matrix no-stack"><thead><tr><th>Раздел</th>${ROLE_COLS.map(([, t]) => html`<th>${t}</th>`)}</tr></thead><tbody>
           ${AP.SECTIONS.map((s) => html`<tr><td><span class="row nowrap" style="gap:10px">${I(s.icon, 'icon-16')}<b>${s.title}</b><span class="muted fs-12">${s.group}</span></span></td>${ROLE_COLS.map(([r]) => { const lv = s.directorOnly ? (r === 'director' ? 3 : 0) : (AP.ROLE_PRESETS[r].perms[s.key] || 0); return html`<td class="lvl-${lv} fw-7 fs-12">${s.directorOnly && r === 'director' ? html`<span class="row nowrap" style="justify-content:center;gap:4px">${I('lock', 'icon-16')}только он</span>` : LVL_SHORT[lv]}</td>`; })}</tr>`)}
           <tr><td class="fw-7">Доступ к цехам</td>${ROLE_COLS.map(([r]) => html`<td class="fs-12 fw-7">${r === 'shop' || r === 'operator' ? 'свой цех' : 'оба'}</td>`)}</tr>
           <tr><td class="fw-7">На старте</td>${ROLE_COLS.map(([r]) => html`<td>${['director', 'shop'].includes(r) ? html`<span class="badge b-ok sm">включён</span>` : html`<span class="badge sm">выключен</span>`}</td>`)}</tr>
@@ -162,11 +163,17 @@
     document.querySelectorAll('[data-tok]').forEach((c) => { const v = css(c.dataset.tok); c.textContent = c.dataset.tok + ' · ' + (v.length < 30 ? v.toUpperCase() : 'градиент'); });
   }
   function boot() {
+    document.documentElement.setAttribute('data-theme', AP.themeWanted());
+    AP.startThemeClock();
     document.body.insertAdjacentHTML('afterbegin', String(render()));
+    UI.enhance(document);
     UI.drawCharts(document);
     fillTokens();
     const tt = document.querySelector('[data-theme-toggle]');
-    tt.onclick = () => { AP.setTheme(AP.theme() === 'dark' ? 'light' : 'dark'); tt.innerHTML = String(I(AP.theme() === 'dark' ? 'sun' : 'moon')); fillTokens(); UI.drawCharts(document); };
+    tt.innerHTML = String(I(AP.theme() === 'dark' ? 'sun' : 'moon'));
+    tt.setAttribute('data-tip', AP.themeTip());
+    tt.onclick = () => { const r = tt.getBoundingClientRect(); UI.hideTip(); AP.toggleTheme({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); };
+    new MutationObserver(() => { fillTokens(); UI.drawCharts(document); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     document.querySelectorAll('[data-toast]').forEach((b) => (b.onclick = () => (b.dataset.toast === 'ok' ? UI.toast('Единица AP-002889 создана', '1 000 шт · статус заказа: в производстве') : UI.toast('Вес отличается от ожидаемого', '+9,4% — перепроверьте упаковку', 'warn'))));
     document.querySelector('[data-modal]').onclick = () => UI.modal({ title: 'Ручной ввод веса', sub: 'Запись попадёт в журнал действий с вашим именем.', body: html`<div class="stack"><div class="field"><label>Вес брутто, кг <span class="req">*</span></label><input class="input input-lg" value="17,95"></div><div class="field"><label>Комментарий <span class="req">*</span></label><textarea class="textarea">Весы Ц1 перезагружались</textarea></div></div>`, foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-primary" data-close>Принять вручную</button>` });
     document.querySelector('[data-drawer]').onclick = () => UI.drawer({ title: 'ЗК-1056 · ООО «Tashkent Savdo Group»', sub: 'Пакет-майка 40×70 с логотипом', body: html`<div class="card"><div class="card-b"><dl class="dl"><dt>Тираж</dt><dd>90 000 шт · 882 кг</dd><dt>Статус</dt><dd>${AP.statusBadge('production', 'Печать')}</dd><dt>Срок</dt><dd>16.10.2026</dd></dl></div></div>`, foot: html`<button class="btn btn-primary">Отметить выработку</button><button class="btn btn-ghost" data-close>Закрыть</button>` });

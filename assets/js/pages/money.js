@@ -1,4 +1,4 @@
-/* Финансы: дашборд руководителя, касса/счёт/карта, долги, себестоимость (ТЗ 4.7, 4.8, 4.11, 4.12) */
+/* Финансы: дашборд директора, касса/счёт/карта, долги, себестоимость (ТЗ 4.7, 4.8, 4.11, 4.12) */
 (function () {
   'use strict';
   const AP = window.AP, UI = AP.ui;
@@ -56,9 +56,10 @@
     }
     rows.sort((a, b) => (a[0] < b[0] ? 1 : -1));
     const total = AP.sum(rows, (r) => (typeof r[4] === 'number' ? r[4] : 0));
+    const FLOW = ['income', 'client', 'exp', 'flow', 'balance'].includes(k); // движение денег: приход «+» зелёным, расход «−» красным
     const dr = UI.drawer({
       title, sub: (k === 'recv' || k === 'payb' || k === 'balance' ? 'на ' + F.date(D.todayISO()) : F.date(R.from) + ' — ' + F.date(R.to)) + ' · ' + rows.length + ' ' + F.plural(rows.length, 'операция', 'операции', 'операций'),
-      body: html`<div class="card"><div class="table-wrap"><table class="table compact"><thead><tr>${cols.map((c, i) => html`<th class="${i === 4 ? 'r' : ''}">${c}</th>`)}</tr></thead><tbody>${rows.slice(0, 400).map((r) => html`<tr><td class="nowrap">${F.date(r[0])}</td><td class="fw-7">${r[1]}</td><td class="fs-13">${r[2]}</td><td class="fs-13">${r[3]}</td><td class="r fw-8 nowrap ${typeof r[4] === 'number' && r[4] < 0 ? 'bad-t' : ''}">${typeof r[4] === 'number' ? F.m(r[4]) : r[4]}</td></tr>`)}</tbody><tfoot><tr><td colspan="4">Итого</td><td class="r">${F.m(total)}</td></tr></tfoot></table></div></div>`,
+      body: html`<div class="card"><div class="table-wrap"><table class="table compact"><thead><tr>${cols.map((c, i) => html`<th class="${i === 4 ? 'r' : ''}">${c}</th>`)}</tr></thead><tbody>${rows.slice(0, 400).map((r) => html`<tr><td class="nowrap">${F.date(r[0])}</td><td class="fw-7">${r[1]}</td><td class="fs-13">${r[2]}</td><td class="fs-13">${r[3]}</td><td class="r fw-8 nowrap">${typeof r[4] === 'number' ? (FLOW ? UI.signed(r[4]) : F.m(r[4])) : r[4]}</td></tr>`)}</tbody><tfoot><tr><td colspan="4">Итого</td><td class="r">${FLOW ? UI.signed(total) : F.m(total)}</td></tr></tfoot></table></div></div>`,
       foot: html`<button class="btn btn-secondary" data-dx>${I('download')}Выгрузить в Excel</button>`,
     });
     dr.querySelector('[data-dx]').onclick = () => AP.exportCSV('operacii-' + kind.replace(':', '-'), [cols].concat(rows.map((r) => r.map((x, i) => (i === 0 ? F.date(x) : typeof x === 'number' ? Math.round(x) : x)))));
@@ -93,8 +94,8 @@
       const upcoming = Pc.flatMap((x) => x.items.map((it) => ({ due: it.due, name: AP.supplier(x.supplierId).name, amount: it.left, overdue: it.overdue }))).concat(AP.obligationsOpen().map((o) => ({ due: o.due, name: o.name, amount: o.amount, overdue: Math.max(0, D.diffDays(D.todayISO(), o.due)) }))).sort((a, b) => (a.due < b.due ? -1 : 1)).slice(0, 6);
       const per = r.q.p || 'month';
       return html`
-        ${UI.pageHead('Финансовый дашборд', 'Деньги предприятия на одной странице. Обновляется сам по оплатам, отгрузкам и расходам. Виден только главному руководителю.', html`
-          <span class="badge b-dark plain">${I('lock', 'icon-16')}только для руководителя</span>
+        ${UI.pageHead('Финансовый дашборд', 'Деньги предприятия на одной странице. Обновляется сам по оплатам, отгрузкам и расходам. Виден только директору.', html`
+          <span class="badge b-dark plain">${I('lock', 'icon-16')}только для директора</span>
           <button class="btn btn-secondary" data-x="csv">${I('download')}Excel</button><button class="btn btn-secondary" data-x="pdf">${I('print')}PDF</button>`)}
         <div class="row mb-16">${UI.periodSeg(per, [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['q', 'Квартал'], ['custom', 'Период…']])}
           ${per === 'custom' ? html`<input class="input input-sm" type="date" data-f="from" value="${r.q.from || R.from}" style="width:160px"><span class="muted">—</span><input class="input input-sm" type="date" data-f="to" value="${r.q.to || R.to}" style="width:160px"><button class="btn btn-soft btn-sm" data-x="apply">Показать</button>` : ''}
@@ -158,7 +159,7 @@
   function opsTab(m) {
     const ops = balanceRow(m, D.iso(D.addDays(D.todayISO(), -45)));
     return html`<div class="card"><div class="table-wrap"><table class="table compact"><thead><tr><th>Когда</th><th>Операция</th><th class="r">Приход</th><th class="r">Расход</th><th class="r">Остаток</th></tr></thead><tbody>
-      ${ops.slice(0, 150).map((o) => html`<tr><td class="nowrap">${F.dt(o.at)}</td><td class="fs-13">${o.t}</td><td class="r ok-t fw-7">${o.v > 0 ? F.m(o.v) : ''}</td><td class="r bad-t fw-7">${o.v < 0 ? F.m(-o.v) : ''}</td><td class="r fw-8">${F.m(o.bal)}</td></tr>`)}</tbody></table></div></div>`;
+      ${ops.slice(0, 150).map((o) => html`<tr><td class="nowrap">${F.dt(o.at)}</td><td class="fs-13">${o.t}</td><td class="r">${o.v > 0 ? UI.signed(o.v) : ''}</td><td class="r">${o.v < 0 ? UI.signed(o.v) : ''}</td><td class="r fw-8 ${o.bal < 0 ? 'bad-t' : ''}">${F.m(o.bal)}</td></tr>`)}</tbody></table></div></div>`;
   }
   function cashTab() {
     const days = AP.dayLabels(14).reverse();
@@ -166,7 +167,7 @@
     const closes = Object.fromEntries(AP.db.cashCloses.map((c) => [c.date, c]));
     return html`<div class="row mb-16"><span class="muted fw-7">Касса: остаток на конец дня и сверка с реальной суммой</span>${AP.can('money', 2) && !closes[today] ? html`<button class="btn btn-primary right" data-x="close">${I('check')}Закрыть день (сверка)</button>` : closes[today] ? html`<span class="badge b-ok right">день закрыт</span>` : ''}</div>
       <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>День</th><th class="r">На начало</th><th class="r">Приход</th><th class="r">Расход</th><th class="r">На конец (программа)</th><th class="r">Пересчитано</th><th class="r">Расхождение</th></tr></thead><tbody>
-      ${days.map((d) => { const b0 = AP.balances(D.iso(D.addDays(d, -1))).cash, b1 = AP.balances(d).cash; const inn = AP.sum(AP.db.payments.filter((p) => p.method === 'cash' && p.date === d), 'amount'); const c = closes[d]; return html`<tr class="${c && c.diff ? 'row-warn' : ''}"><td class="fw-7">${F.date(d)}${d === today ? html` <span class="badge b-brand sm">сегодня</span>` : ''}</td><td class="r">${F.m(b0)}</td><td class="r ok-t">${F.m(inn)}</td><td class="r bad-t">${F.m(inn - (b1 - b0))}</td><td class="r fw-8">${F.m(b1)}</td><td class="r">${c ? F.m(c.actual) : html`<span class="muted">—</span>`}</td><td class="r fw-8 ${c && c.diff ? 'bad-t' : 'ok-t'}">${c ? (c.diff ? F.m(c.diff) : '0') : ''}${c && c.note ? html`<span class="cell-sub">${c.note}</span>` : ''}</td></tr>`; })}
+      ${days.map((d) => { const b0 = AP.balances(D.iso(D.addDays(d, -1))).cash, b1 = AP.balances(d).cash; const inn = AP.sum(AP.db.payments.filter((p) => p.method === 'cash' && p.date === d), 'amount'); const c = closes[d]; return html`<tr class="${c && c.diff ? 'row-warn' : ''}"><td class="fw-7">${F.date(d)}${d === today ? html` <span class="badge b-brand sm">сегодня</span>` : ''}</td><td class="r">${F.m(b0)}</td><td class="r">${UI.signed(inn)}</td><td class="r">${UI.signed(-(inn - (b1 - b0)))}</td><td class="r fw-8">${F.m(b1)}</td><td class="r">${c ? F.m(c.actual) : html`<span class="muted">—</span>`}</td><td class="r fw-8">${c ? UI.signed(c.diff) : ''}${c && c.note ? html`<span class="cell-sub">${c.note}</span>` : ''}</td></tr>`; })}
       </tbody></table></div></div>`;
   }
 
@@ -245,8 +246,8 @@
         body = html`<div class="row mb-16">${UI.periodSeg(r.q.p || 'month')}<div class="seg">${[['', 'Все']].concat(PAYK.map((k) => [k, payName(k)])).map(([k, t]) => html`<button class="${(r.q.m || '') === k ? 'on' : ''}" data-m="${k}">${t}</button>`)}</div>
           ${AP.can('money', 2) ? html`<button class="btn btn-primary right" data-x="${isIn ? 'pay' : 'exp'}">${I('plus')}${isIn ? 'Внести поступление' : 'Внести расход'}</button>` : ''}</div>
           <div class="card"><div class="table-wrap"><table class="table"><thead><tr><th>Дата</th><th>${isIn ? 'Клиент / заказ' : 'Статья'}</th><th>Вид оплаты</th><th>Кто внёс</th><th class="r">Сумма</th></tr></thead><tbody>
-          ${list.slice(0, 200).map((x) => html`<tr><td class="nowrap">${F.dt(x.at)}</td><td>${isIn ? html`<span class="cell-title">${AP.client(x.clientId).name}</span><span class="cell-sub">${x.orderId ? html`<a href="#" data-act="open-order" data-id="${x.orderId}">${AP.order(x.orderId).no}</a>` : 'аванс'}${x.note ? ' · ' + x.note : ''}</span>` : html`<span class="cell-title">${AP.EXP_CATS[x.category]}</span><span class="cell-sub">${x.supplierId ? AP.supplier(x.supplierId).name + ' · ' : ''}${x.note || ''}</span>`}</td><td><span class="row nowrap" style="gap:6px"><i class="dot" style="background:${AP.PAY[x.method].c}"></i>${payName(x.method)}</span></td><td class="muted fs-13">${(AP.userById(x.by) || {}).name || '—'}</td><td class="r fw-8 nowrap ${isIn ? '' : 'bad-t'}">${isIn ? '' : '−'}${F.m(x.amount)}</td></tr>`)}
-          </tbody><tfoot><tr><td colspan="4">Итого за период · ${list.length} ${F.plural(list.length, 'операция', 'операции', 'операций')}</td><td class="r">${F.m(AP.sum(list, 'amount'))}</td></tr></tfoot></table></div></div>`;
+          ${list.slice(0, 200).map((x) => html`<tr><td class="nowrap">${F.dt(x.at)}</td><td>${isIn ? html`<span class="cell-title">${AP.client(x.clientId).name}</span><span class="cell-sub">${x.orderId ? html`<a href="#" data-act="open-order" data-id="${x.orderId}">${AP.order(x.orderId).no}</a>` : 'аванс'}${x.note ? ' · ' + x.note : ''}</span>` : html`<span class="cell-title">${AP.EXP_CATS[x.category]}</span><span class="cell-sub">${x.supplierId ? AP.supplier(x.supplierId).name + ' · ' : ''}${x.note || ''}</span>`}</td><td><span class="row nowrap" style="gap:6px"><i class="dot" style="background:${AP.PAY[x.method].c}"></i>${payName(x.method)}</span></td><td class="muted fs-13">${(AP.userById(x.by) || {}).name || '—'}</td><td class="r">${UI.signed(isIn ? x.amount : -x.amount)}</td></tr>`)}
+          </tbody><tfoot><tr><td colspan="4">Итого за период · ${list.length} ${F.plural(list.length, 'операция', 'операции', 'операций')}</td><td class="r">${UI.signed((isIn ? 1 : -1) * AP.sum(list, 'amount'))}</td></tr></tfoot></table></div></div>`;
       } else if (tab === 'cash') body = cashTab();
       else body = opsTab(tab);
       return html`${UI.pageHead('Касса, расчётный счёт, корпоративная карта', 'Каждое поступление — с клиентом, заказом, суммой, датой, видом оплаты и тем, кто его внёс')}
@@ -355,7 +356,7 @@
     const name = isSup ? AP.supplier(who).name : AP.client(who).name;
     const opts = AP.db.clients.filter(AP.clientVisible).map((c) => [c.id, 'Клиент: ' + c.name]).concat(AP.flag('ownClientsOnly') ? [] : AP.db.suppliers.map((s) => [s.id, 'Поставщик: ' + s.name]));
     AP._act = { name, from, to, open, list, bal, isSup };
-    return html`<div class="row mb-16"><select class="select" data-f="who" style="max-width:380px">${UI.options(opts, who)}</select><input class="input input-sm" type="date" data-f="from" value="${from}" style="width:160px"><span class="muted">—</span><input class="input input-sm" type="date" data-f="to" value="${to}" style="width:160px"><button class="btn btn-soft btn-sm" data-x="actgo">Сформировать</button><button class="btn btn-primary btn-sm right" data-x="actprint">${I('print')}Печать акта</button></div>
+    return html`<div class="row mb-16"><select class="select" data-f="who" aria-label="Контрагент" style="max-width:380px">${UI.options(opts, who)}</select><input class="input input-sm" type="date" data-f="from" value="${from}" style="width:160px"><span class="muted">—</span><input class="input input-sm" type="date" data-f="to" value="${to}" style="width:160px"><button class="btn btn-soft btn-sm" data-x="actgo">Сформировать</button><button class="btn btn-primary btn-sm right" data-x="actprint">${I('print')}Печать акта</button></div>
       <div class="card"><div class="card-h"><h3>Акт сверки: ${name}</h3><span class="sub">${F.date(from)} — ${F.date(to)}</span></div><div class="table-wrap mt-8"><table class="table compact"><thead><tr><th>Дата</th><th>Документ</th><th class="r">${isSup ? 'Оплачено нами' : 'Отгружено (дебет)'}</th><th class="r">${isSup ? 'Получено от них' : 'Оплачено (кредит)'}</th><th class="r">Сальдо</th></tr></thead><tbody>
         <tr><td></td><td class="fw-8">Сальдо на начало</td><td></td><td></td><td class="r fw-8">${F.m(open)}</td></tr>
         ${list.map((o) => html`<tr><td>${F.date(o.d)}</td><td>${o.doc}</td><td class="r">${o.dt ? F.m(o.dt) : ''}</td><td class="r">${o.kt ? F.m(o.kt) : ''}</td><td class="r fw-7">${F.m(o.bal)}</td></tr>`)}
@@ -368,7 +369,7 @@
       const tab = r.q.tab || 'recv';
       const own = AP.flag('ownClientsOnly') && !AP.isDirector();
       const body = { recv: recvTab, payables: paybTab, summary: summaryTab, act: actTab }[tab] || recvTab;
-      return html`${UI.pageHead('Дебиторская и кредиторская задолженность', own ? 'Долги ваших клиентов. Полную картину видит главный руководитель.' : 'Собирается сама из заказов, отгрузок, приходов сырья и платежей — вручную вести не нужно')}
+      return html`${UI.pageHead('Дебиторская и кредиторская задолженность', own ? 'Долги ваших клиентов. Полную картину видит директор.' : 'Собирается сама из заказов, отгрузок, приходов сырья и платежей — вручную вести не нужно')}
         ${UI.tabs([['recv', 'Нам должны'], own ? null : ['payables', 'Мы должны'], own ? null : ['summary', 'Общая картина'], ['act', 'Акт сверки']], tab)}${body(r.q)}`;
     },
     mount(el, r) {

@@ -88,7 +88,7 @@
     const g = AP.groupBy(list.filter((w) => AP.material(w.materialId).unit === 'кг'), 'materialId');
     const pend = AP.db.approvals.filter((a) => a.kind === 'writeoff_fix' && a.status === 'pending');
     return html`
-      <div class="row mb-16">${UI.periodSeg(per)}<select class="select" style="max-width:280px" data-f="m">${UI.options(AP.db.materials.map((m) => [m.id, m.name]), q.m, 'Все позиции')}</select></div>
+      <div class="row mb-16">${UI.periodSeg(per)}<select class="select" style="max-width:280px" data-f="m" aria-label="Позиция">${UI.options(AP.db.materials.map((m) => [m.id, m.name]), q.m, 'Все позиции')}</select></div>
       <div class="grid g-21 mb-16"><div class="card"><div class="card-h"><h3>Расход: факт против нормы</h3><span class="sub">перерасход и экономия за период</span></div><div class="card-b">${Object.keys(g).length ? UI.normFact(Object.keys(g).map((k) => ({ label: AP.material(k).name, fact: AP.sum(g[k], 'qty'), norm: AP.sum(g[k], 'norm') })).sort((a, b) => b.fact - a.fact).slice(0, 8)) : UI.empty('Списаний нет', '')}</div></div>
         <div class="card"><div class="card-h"><h3>Как работает списание</h3></div><div class="card-b fs-13 text-2 stack" style="gap:10px;font-weight:600">
           <div>Гранулят и мастербатч списываются при выпуске плёнки, краски и растворитель — при печати, упаковка — при взвешивании каждой единицы.</div>
@@ -170,7 +170,7 @@
       UI.$$('[data-fix]', el).forEach((b) => (b.onclick = async () => {
         const w = AP.db.writeoffs.find((x) => x.id === b.dataset.fix), m = AP.material(w.materialId);
         const can = AP.flag('correctWriteoff');
-        const r2 = await UI.prompt('Исправление списания', m.name + ' · ' + (w.orderId ? AP.order(w.orderId).no : '') + ' · сейчас ' + qn(m, w.qty) + ' ' + m.unit + (can ? '' : '. У вас нет права исправлять — запрос уйдёт на утверждение руководителю.'), { extra: html`<div class="field"><label>Правильное количество, ${m.unit}</label><input class="input" name="q" type="number" step="0.1" value="${(Math.round(w.qty * 10) / 10)}"></div>`, ok: can ? 'Исправить' : 'Отправить на утверждение' });
+        const r2 = await UI.prompt('Исправление списания', m.name + ' · ' + (w.orderId ? AP.order(w.orderId).no : '') + ' · сейчас ' + qn(m, w.qty) + ' ' + m.unit + (can ? '' : '. У вас нет права исправлять — запрос уйдёт на утверждение директору.'), { extra: html`<div class="field"><label>Правильное количество, ${m.unit}</label><input class="input" name="q" type="number" step="0.1" value="${(Math.round(w.qty * 10) / 10)}"></div>`, ok: can ? 'Исправить' : 'Отправить на утверждение' });
         if (!r2) return;
         const nq = parseFloat(r2.q);
         if (!(nq >= 0) || Math.abs(nq - w.qty) < 0.01) return UI.toast('Количество не изменилось', '', 'info');
@@ -178,7 +178,7 @@
         else {
           AP.db.approvals.push({ id: 'AR' + AP.seq('AR'), kind: 'writeoff_fix', status: 'pending', ts: new Date().toISOString(), uid: AP.user.id, user: AP.user.name, title: 'Исправление списания: ' + m.name.toLowerCase() + (w.orderId ? ' по ' + AP.order(w.orderId).no : ''), ref: { writeoffId: w.id, oldQty: w.qty, newQty: nq }, comment: r2.comment });
           AP.audit('Запрос на исправление списания', 'writeoff', w.id, r2.comment); AP.save();
-          UI.toast('Отправлено на утверждение', 'Руководитель увидит запрос в уведомлениях', 'info');
+          UI.toast('Отправлено на утверждение', 'Директор увидит запрос в уведомлениях', 'info');
         }
         AP.render();
       }));
@@ -244,7 +244,7 @@
     return html`<div class="scan-box mb-16"><span class="scan-ic">${I('scan')}</span><div class="grow"><b>Сканируйте коробки, мешки и рулоны при приёмке</b><div class="row mt-8"><input class="input input-lg grow" id="accIn" placeholder="AP-000123" autofocus autocomplete="off"><select class="select input-lg" id="accLoc" style="max-width:150px">${UI.options(placesFor('w1').concat(placesFor('w2').slice(0, 12)).map((x) => [x, x]))}</select></div></div></div>
       <div id="accMsg"></div>
       ${Object.keys(g).length ? Object.keys(g).map((oid) => { const o = AP.order(oid), p = AP.product(o.productId); return html`<div class="card mb-16"><div class="card-h"><h3>${o.no} · ${p.name}</h3><span class="sub">${AP.client(o.clientId).name} · ${UI.wsChip(o.workshop)}</span>${AP.can('warehouse', 2) ? html`<button class="btn btn-primary btn-sm" data-accall="${oid}">${I('check')}Принять все (${g[oid].length})</button>` : ''}</div>
-        <div class="card-b"><div class="row" style="gap:6px">${g[oid].map((u) => html`<button class="chip ghost mono" style="border:0;cursor:pointer;height:30px" data-acc="${u.id}" title="${F.kg(u.net)} · ${F.dt(u.at)}">${I('box')}${u.id}</button>`)}</div></div></div>`; }) : UI.empty('Всё принято', 'Новые единицы появятся здесь сразу после взвешивания в цехе', 'check')}`;
+        <div class="card-b"><div class="row" style="gap:6px">${g[oid].map((u) => html`<button class="chip ghost mono" style="border:0;cursor:pointer;height:30px" data-acc="${u.id}" data-tip="${F.kg(u.net)} · ${F.dt(u.at)}">${I('box')}${u.id}</button>`)}</div></div></div>`; }) : UI.empty('Всё принято', 'Новые единицы появятся здесь сразу после взвешивания в цехе', 'check')}`;
   }
 
   function debtCheck(o) {
@@ -278,10 +278,10 @@
           <dl class="dl fs-13"><dt>Продукция</dt><dd>${p.name}</dd><dt>Осталось отгрузить</dt><dd>${AP.fmtQty(p, Math.max(0, remain))}</dd><dt>На складе</dt><dd>${avail.length} ед.${pallets.length ? ' · ' + pallets.length + ' паллет' : ''}</dd></dl>
           <form class="stack" id="ldForm" style="gap:10px"><div class="field"><label>Машина (госномер)</label><input class="input" name="truck" placeholder="10 123 AAA"></div><div class="field"><label>Водитель и телефон</label><input class="input" name="driver" placeholder="ФИО, +998 …"></div><div class="field"><label>Адрес доставки</label><input class="input" name="address" value="${c.address}"></div></form>
         </div></div>
-        ${!dc.ok ? html`<div class="alert ${dc.approved ? 'alert-ok' : 'alert-bad'}">${I(dc.approved ? 'check' : 'alert')}<div class="grow"><b>${dc.approved ? 'Отгрузка разрешена руководителем' : 'У клиента ' + (dc.over ? 'просроченный долг' : 'превышен лимит долга')}</b>
-          <small>${money ? 'Долг ' + F.money(dc.d.total) + (dc.over ? ', просрочено ' + F.money(dc.d.overdue) + ' (' + dc.d.maxDays + ' дн.)' : '') + (dc.c.limit ? ', лимит ' + F.money(dc.c.limit) : '') : 'Подробности видит руководитель и бухгалтер'}. Решение об отгрузке принимает руководитель.</small>
+        ${!dc.ok ? html`<div class="alert ${dc.approved ? 'alert-ok' : 'alert-bad'}">${I(dc.approved ? 'check' : 'alert')}<div class="grow"><b>${dc.approved ? 'Отгрузка разрешена директором' : 'У клиента ' + (dc.over ? 'просроченный долг' : 'превышен лимит долга')}</b>
+          <small>${money ? 'Долг ' + F.money(dc.d.total) + (dc.over ? ', просрочено ' + F.money(dc.d.overdue) + ' (' + dc.d.maxDays + ' дн.)' : '') + (dc.c.limit ? ', лимит ' + F.money(dc.c.limit) : '') : 'Подробности видит директор и бухгалтер'}. Решение об отгрузке принимает директор.</small>
           ${!dc.approved && AP.flag('approve') ? html`<label class="check mt-8" style="color:var(--text)"><input type="checkbox" id="ldApprove" ${L.approved ? raw('checked') : ''}>Разрешаю отгрузку под мою ответственность</label>` : ''}
-          ${!dc.approved && !AP.flag('approve') ? html`<button class="btn btn-sm btn-secondary mt-8" data-x="askship" ${dc.pending ? raw('disabled') : ''}>${dc.pending ? 'Запрос отправлен — ждём решения' : 'Запросить решение руководителя'}</button>` : ''}</div></div>` : ''}
+          ${!dc.approved && !AP.flag('approve') ? html`<button class="btn btn-sm btn-secondary mt-8" data-x="askship" ${dc.pending ? raw('disabled') : ''}>${dc.pending ? 'Запрос отправлен — ждём решения' : 'Запросить решение директора'}</button>` : ''}</div></div>` : ''}
       </div>
       <div class="stack">
         <div class="card"><div class="card-h"><h3>2. Сканирование при погрузке</h3><span class="sub">программа проверит заказ, количество и повторы</span></div><div class="card-b">
@@ -297,7 +297,7 @@
           <div class="row" style="gap:6px">${pallets.map((pl) => html`<button class="chip ${AP.childrenOf(pl.id).every((k) => L.scanned.includes(k.id)) ? 'w2' : 'ghost'} mono" style="border:0;cursor:pointer;height:30px" data-scan="${pl.id}">${I('pallet')}${pl.id}</button>`)}${avail.filter((u) => !u.parent).map((u) => html`<button class="chip ${L.scanned.includes(u.id) ? 'w2' : 'ghost'} mono" style="border:0;cursor:pointer;height:30px" data-scan="${u.id}">${L.scanned.includes(u.id) ? I('check') : I('box')}${u.id}</button>`)}</div>
           <div class="fs-12 muted mt-12">Для проверки: попробуйте ввести код другого заказа или уже отгруженной единицы — программа не даст погрузить.</div>
         </div>
-        <div class="card-f"><button class="btn btn-primary btn-lg" data-x="ship" ${!sc.length || blocked ? raw('disabled') : ''}>${I('truck')}Оформить отгрузку</button>${sc.length ? html`<button class="btn btn-ghost" data-x="clear">Очистить</button>` : ''}${blocked ? html`<span class="bad-t fw-7 fs-13">нужно решение руководителя</span>` : ''}</div></div>
+        <div class="card-f"><button class="btn btn-primary btn-lg" data-x="ship" ${!sc.length || blocked ? raw('disabled') : ''}>${I('truck')}Оформить отгрузку</button>${sc.length ? html`<button class="btn btn-ghost" data-x="clear">Очистить</button>` : ''}${blocked ? html`<span class="bad-t fw-7 fs-13">нужно решение директора</span>` : ''}</div></div>
       </div></div>`;
   }
 
@@ -378,14 +378,14 @@
         const cl = UI.$('[data-x=clear]', el); if (cl) cl.onclick = () => { L.scanned = []; L.msg = null; L.control = null; AP.render(); };
         const ct = UI.$('[data-x=control]', el); if (ct) ct.onclick = () => { const g = AP.sum(L.scanned.map(AP.unit), 'gross'); L.control = Math.round(g * (0.996 + Math.random() * 0.008) * 2) / 2; AP.render(); };
         const ask = UI.$('[data-x=askship]', el);
-        if (ask) ask.onclick = () => { const c = AP.client(o.clientId); AP.db.approvals.push({ id: 'AR' + AP.seq('AR'), kind: 'ship_overdue', status: 'pending', ts: new Date().toISOString(), uid: AP.user.id, user: AP.user.name, title: 'Отгрузка должнику: ' + c.name + ' · ' + o.no, ref: { orderId: o.id }, comment: 'Клиент с просроченным долгом, машина на погрузке' }); AP.audit('Запрос решения об отгрузке должнику', 'order', o.id, o.no); AP.save(); UI.toast('Запрос отправлен руководителю', 'Как только он разрешит — кнопка станет активной', 'info'); AP.render(); };
+        if (ask) ask.onclick = () => { const c = AP.client(o.clientId); AP.db.approvals.push({ id: 'AR' + AP.seq('AR'), kind: 'ship_overdue', status: 'pending', ts: new Date().toISOString(), uid: AP.user.id, user: AP.user.name, title: 'Отгрузка должнику: ' + c.name + ' · ' + o.no, ref: { orderId: o.id }, comment: 'Клиент с просроченным долгом, машина на погрузке' }); AP.audit('Запрос решения об отгрузке должнику', 'order', o.id, o.no); AP.save(); UI.toast('Запрос отправлен директору', 'Как только он разрешит — кнопка станет активной', 'info'); AP.render(); };
         const sb = UI.$('[data-x=ship]', el);
         if (sb) sb.onclick = () => {
           const d = UI.formData(form);
           if (!d.truck) { form.truck.closest('.field').classList.add('is-invalid'); form.truck.focus(); return; }
           const us = L.scanned.map(AP.unit);
           const dc = debtCheck(o);
-          if (!dc.ok && L.approved && !dc.approved) { AP.db.approvals.push({ id: 'AR' + AP.seq('AR'), kind: 'ship_overdue', status: 'approved', ts: new Date().toISOString(), uid: AP.user.id, user: AP.user.name, title: 'Отгрузка должнику: ' + AP.client(o.clientId).name + ' · ' + o.no, ref: { orderId: o.id }, comment: 'Разрешено при погрузке', decidedBy: AP.user.name, decidedAt: new Date().toISOString() }); AP.audit('Разрешена отгрузка клиенту с долгом', 'order', o.id, o.no + ' · решение руководителя'); }
+          if (!dc.ok && L.approved && !dc.approved) { AP.db.approvals.push({ id: 'AR' + AP.seq('AR'), kind: 'ship_overdue', status: 'approved', ts: new Date().toISOString(), uid: AP.user.id, user: AP.user.name, title: 'Отгрузка должнику: ' + AP.client(o.clientId).name + ' · ' + o.no, ref: { orderId: o.id }, comment: 'Разрешено при погрузке', decidedBy: AP.user.name, decidedAt: new Date().toISOString() }); AP.audit('Разрешена отгрузка клиенту с долгом', 'order', o.id, o.no + ' · решение директора'); }
           const s = { id: 'ОТ-' + String(AP.seq('ОТ-')).padStart(4, '0'), orderId: o.id, clientId: o.clientId, date: D.todayISO(), at: new Date().toISOString(), units: us.map((u) => u.id), qty: AP.sum(us, 'pcs'), kg: Math.round(AP.sum(us, 'gross') * 10) / 10, truck: d.truck, driver: d.driver || '—', address: d.address, doc: 'ТТН-' + String(AP.seq('ТТН')).padStart(5, '0'), by: AP.user.id, controlKg: L.control };
           us.forEach((u) => { u.status = 'shipped'; u.shipmentId = s.id; if (u.parent) { const pl = AP.unit(u.parent); if (AP.childrenOf(pl.id).every((k) => k.status === 'shipped' || us.includes(k))) { pl.status = 'shipped'; pl.shipmentId = s.id; } } });
           AP.db.shipments.push(s);

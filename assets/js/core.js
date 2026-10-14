@@ -105,7 +105,7 @@
   /* ---------- Хранилище ---------- */
   const DB_KEY = 'ap.db.v1';
   const SESSION_KEY = 'ap.session';
-  AP.DB_VERSION = 3;
+  AP.DB_VERSION = 4;
   let memo = {};
 
   function shiftDates(obj, deltaDays) {
@@ -132,6 +132,9 @@
       db.baseDay = today;
       AP.db = db; persist();
     }
+    // правки демо без сброса данных: «Главный руководитель» → «Директор»
+    (db.users || []).forEach((u) => { if (u.title === 'Главный руководитель') u.title = 'Директор'; });
+    (db.employees || []).forEach((e) => { if (e.active == null) e.active = true; });
     AP.db = db;
     return db;
   };
@@ -171,7 +174,7 @@
       AP.save();
       return { ok: false, error: 'Неверный логин или пароль' };
     }
-    if (!u.active) return { ok: false, error: 'Учётная запись отключена. Обратитесь к главному руководителю.' };
+    if (!u.active) return { ok: false, error: 'Учётная запись отключена. Обратитесь к директору.' };
     const s = JSON.stringify({ uid: u.id, at: Date.now() });
     (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, s);
     u.lastLogin = new Date().toISOString();
@@ -218,14 +221,14 @@
   AP.FLAGS = [
     { key: 'money', title: 'Видит цены и суммы', hint: 'цены заказов, оплаты, стоимость сырья' },
     { key: 'manualWeight', title: 'Ручной ввод веса', hint: 'только с обязательным комментарием, пишется в журнал' },
-    { key: 'correctWriteoff', title: 'Исправление списаний', hint: 'без права — исправление уходит на утверждение руководителю' },
+    { key: 'correctWriteoff', title: 'Исправление списаний', hint: 'без права — исправление уходит на утверждение директору' },
     { key: 'approve', title: 'Утверждение операций', hint: 'исправления списаний, отгрузка должнику, корректировки остатков' },
     { key: 'ownClientsOnly', title: 'Только свои клиенты', hint: 'для менеджера по продажам — видит клиентов и долги, где он ответственный' },
   ];
   const P = (lv) => lv; // для читаемости пресетов
   AP.ROLE_PRESETS = {
     director: {
-      title: 'Главный руководитель', workshop: 'all',
+      title: 'Директор', workshop: 'all',
       perms: Object.fromEntries(AP.SECTIONS.map((s) => [s.key, 3])),
       flags: { money: true, manualWeight: true, correctWriteoff: true, approve: true },
     },
@@ -342,16 +345,16 @@
   AP.shippedAmount = (o) => AP.orderAmount(o, AP.shippedQty(o));
 
   AP.STATUSES = {
-    new: { t: 'Новый', c: 'b-brand' },
-    layout: { t: 'Согласование макета', c: 'b-violet' },
-    waiting: { t: 'Ожидает сырьё', c: 'b-warn' },
-    queue: { t: 'В очереди', c: '' },
-    production: { t: 'В производстве', c: 'b-info' },
-    ready: { t: 'Готов', c: 'b-teal' },
-    stock: { t: 'На складе', c: 'b-cyan' },
-    partial: { t: 'Частично отгружен', c: 'b-orange' },
-    shipped: { t: 'Отгружен', c: 'b-ok' },
-    closed: { t: 'Закрыт', c: 'b-dark' },
+    new: { t: 'Новый', s: 'Новые', c: 'b-brand' },
+    layout: { t: 'Согласование макета', s: 'Макет', c: 'b-violet' },
+    waiting: { t: 'Ожидает сырьё', s: 'Ждут сырьё', c: 'b-warn' },
+    queue: { t: 'В очереди', s: 'В очереди', c: '' },
+    production: { t: 'В производстве', s: 'В работе', c: 'b-info' },
+    ready: { t: 'Готов', s: 'Готовы', c: 'b-teal' },
+    stock: { t: 'На складе', s: 'На складе', c: 'b-cyan' },
+    partial: { t: 'Частично отгружен', s: 'Частично', c: 'b-orange' },
+    shipped: { t: 'Отгружен', s: 'Отгружены', c: 'b-ok' },
+    closed: { t: 'Закрыт', s: 'Закрыты', c: 'b-dark' },
     cancelled: { t: 'Отменён', c: 'b-bad' },
   };
   AP.STATUS_ORDER = ['new', 'layout', 'waiting', 'queue', 'production', 'ready', 'stock', 'partial', 'shipped', 'closed'];
@@ -627,7 +630,7 @@
     });
   };
 
-  /* ---------- Уведомления руководителю (ТЗ 4.10) ---------- */
+  /* ---------- Уведомления директору (ТЗ 4.10) ---------- */
   AP.alerts = function () {
     return AP.memo('alerts:' + (AP.user ? AP.user.id : '') + AP.scope(), () => {
       const out = [];

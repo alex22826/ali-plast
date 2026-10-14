@@ -1,4 +1,4 @@
-/* Сводка: руководитель видит оба цеха, начальник цеха — свой экран (ТЗ 4.5, 4.10) */
+/* Сводка: директор видит оба цеха, начальник цеха — свой экран (ТЗ 4.5, 4.10) */
 (function () {
   'use strict';
   const AP = window.AP, UI = AP.ui;
@@ -109,7 +109,7 @@
 
       <div class="card mt-16">
         <div class="card-h"><h3>Где сейчас заказы</h3><span class="sub">статус меняется сам — по весам, складу и оплатам</span></div>
-        <div class="card-b"><div class="pipeline">${AP.STATUS_ORDER.map((k) => html`<button class="pipe" data-href="#/orders?st=${k}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].t}</span><b>${pipe[k] || 0}</b></button>`)}</div></div>
+        <div class="card-b"><div class="pipeline">${AP.STATUS_ORDER.map((k) => html`<button class="pipe" data-href="#/orders?st=${k}"><span><i class="dot" style="background:currentColor"></i>${AP.STATUSES[k].s}</span><b>${pipe[k] || 0}</b></button>`)}</div></div>
       </div>`;
   }
 
@@ -149,7 +149,7 @@
               <div class="row" style="gap:8px"><b>${o.no}</b>${AP.statusBadge(stt, stt === 'production' ? AP.STAGES[stg].short : '')}${o.urgent ? html`<span class="chip urgent">срочно</span>` : ''}</div>
               <div class="fs-12 muted mt-8">${p.name} · ${AP.fmtQty(p, o.qty)} · до ${F.date(o.deadline)}</div>
               ${stt === 'production' ? html`<div class="mt-8">${UI.progress(done / need, '', 'sm')}</div>` : ''}</div></li>`;
-          }) : html`<li>${UI.empty('Заданий нет', 'Новые задания назначает руководитель или вы — в разделе «Производство»')}</li>`}</ul></div></div>
+          }) : html`<li>${UI.empty('Заданий нет', 'Новые задания назначает директор или вы — в разделе «Производство»')}</li>`}</ul></div></div>
         <div class="card"><div class="card-h"><h3>Где проблемы</h3><span class="badge ${alerts.length ? 'b-bad' : 'b-ok'}">${alerts.length}</span></div><div class="card-b flush">${alertList(alerts, 8)}</div></div>
       </div>
       <div class="grid g-2 mt-16">

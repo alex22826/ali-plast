@@ -91,7 +91,7 @@
     ];
 
     const users = [
-      { id: 'u1', login: 'director', name: 'Алишер Юсупов', role: 'director', title: 'Главный руководитель', workshop: 'all', active: true, passHash: '7c76209d2c373c9535743267a6397b930b131586cc40277c131eb77e7152f4f8' },
+      { id: 'u1', login: 'director', name: 'Алишер Юсупов', role: 'director', title: 'Директор', workshop: 'all', active: true, passHash: '7c76209d2c373c9535743267a6397b930b131586cc40277c131eb77e7152f4f8' },
       { id: 'u2', login: 'ceh1', name: 'Бахтиёр Каримов', role: 'shop', title: 'Начальник цеха №1', workshop: 'w1', active: true, passHash: '6070bbf9b2ccdb95101e8602c1c61942d9b613548fc9ef4f280c4fc19de02d98' },
       { id: 'u3', login: 'ceh2', name: 'Шерзод Назаров', role: 'shop', title: 'Начальник цеха №2', workshop: 'w2', active: true, passHash: 'a60260c5decb55a5c78f687643e3a78863ebf0068932fb8b8d646b25a37a734a' },
       { id: 'u4', login: 'sklad', name: 'Дилшод Рашидов', role: 'storekeeper', title: 'Кладовщик', workshop: 'all', active: false, optional: true, passHash: 'b8467d4070144fa599610a8fbf026375fa140858c6f2fb436108099175f8f955' },
@@ -562,7 +562,7 @@
     const approvals = [];
     if (woInk) {
       approvals.push({ id: 'AR1', kind: 'writeoff_fix', status: 'pending', ts: iso(now - 2.2 * H), uid: 'u3', user: 'Шерзод Назаров', title: 'Исправление списания: краска синяя по ' + A.p2.no, ref: { writeoffId: woInk.id, oldQty: woInk.qty, newQty: Math.round(woInk.qty * 0.55 * 10) / 10 }, comment: 'Банку краски отметили дважды при смене, фактический расход меньше' });
-      log(now - 2.2 * H, 'u3', 'Запрос на исправление списания', 'writeoff', woInk.id, 'Ожидает решения руководителя');
+      log(now - 2.2 * H, 'u3', 'Запрос на исправление списания', 'writeoff', woInk.id, 'Ожидает решения директора');
     }
     const woOld = writeoffs.find((w) => w.materialId === 'hdpe' && w.at < iso(T0 - 30 * DAY));
     if (woOld) {
@@ -635,17 +635,17 @@
         for (; i < ev.length && Date.parse(ev[i][0]) < endDay; i++) { bal[ev[i][1]] += ev[i][2]; mins[ev[i][1]] = Math.min(mins[ev[i][1]], bal[ev[i][1]]); }
         if (endDay > NOW) continue;
         const wd = new Date(endDay).getDay();
-        if (wd === 5 && bal.cash > 22e6) { const a = Math.round((bal.cash - 14e6) / 1e6) * 1e6; tr.push({ id: 'TR' + (tr.length + 1), date: dISO(endDay), at: iso(endDay), from: 'cash', to: 'bank', amount: a, note: 'Инкассация выручки на расчётный счёт', by: 'u1' }); bal.cash -= a; bal.bank += a; }
+        if (wd === 5 && bal.cash > 45e6) { const a = Math.round((bal.cash - 30e6) / 1e6) * 1e6; tr.push({ id: 'TR' + (tr.length + 1), date: dISO(endDay), at: iso(endDay), from: 'cash', to: 'bank', amount: a, note: 'Инкассация выручки на расчётный счёт', by: 'u1' }); bal.cash -= a; bal.bank += a; }
         if (wd === 1 && bal.card > 30e6) { const a = Math.round((bal.card - 15e6) / 1e6) * 1e6; tr.push({ id: 'TR' + (tr.length + 1), date: dISO(endDay), at: iso(endDay), from: 'card', to: 'bank', amount: a, note: 'Перевод с корпоративной карты на расчётный счёт', by: 'u1' }); bal.card -= a; bal.bank += a; }
       }
       for (; i < ev.length; i++) { bal[ev[i][1]] += ev[i][2]; mins[ev[i][1]] = Math.min(mins[ev[i][1]], bal[ev[i][1]]); }
       return { mins, tr };
     };
     let open = { cash: 18e6, bank: 120e6, card: 8e6 };
-    for (let it = 0; it < 4; it++) {
+    for (let it = 0; it < 10; it++) {
       const { mins } = simulate(open);
       let ok = true;
-      for (const k of ['cash', 'bank', 'card']) { const floor = k === 'bank' ? 25e6 : 2e6; if (mins[k] < floor) { open[k] += Math.round((floor - mins[k]) / 1e6 + 1) * 1e6; ok = false; } }
+      for (const k of ['cash', 'bank', 'card']) { const floor = k === 'bank' ? 25e6 : k === 'cash' ? 4e6 : 2e6; if (mins[k] < floor) { open[k] += Math.round((floor - mins[k]) / 1e6 + 1) * 1e6; ok = false; } }
       if (ok) break;
     }
     db.opening = open;

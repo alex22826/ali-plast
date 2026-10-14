@@ -29,42 +29,95 @@
     const pay = e.payType === 'piece' ? kg * e.rate : shifts * e.rate;
     return { kg, shifts, pay, w };
   }
+  const POSITIONS = ['Мастер смены', 'Оператор экструдера', 'Печатник', 'Оператор пакетоделательной машины', 'Оператор вырубного пресса', 'Упаковщик', 'Наладчик оборудования', 'Подсобный рабочий', 'Кладовщик', 'Грузчик', 'Водитель'];
+  const SHIFTS = { A: 'А (день)', B: 'Б (ночь)', D: 'Дневная 6/1' };
+  const empVisible = (e) => (e.workshop === 'sklad' ? AP.scope() === 'all' && AP.userWorkshop() === 'all' : AP.inScope(e.workshop));
+
+  /* карточка сотрудника: добавить или изменить (п. 9) */
+  function empDialog(e) {
+    const isNew = !e;
+    const fixed = AP.userWorkshop();
+    e = e || { name: '', phone: '+998 ', workshop: fixed !== 'all' ? fixed : 'w1', position: 'Оператор экструдера', shift: 'A', payType: 'piece', rate: 1200, machine: null, hired: D.todayISO(), active: true };
+    const money = AP.seeMoney();
+    const wsOpts = (fixed !== 'all' ? [fixed] : ['w1', 'w2', 'sklad']).map((w) => [w, AP.wsName(w)]);
+    const machOpts = (w) => [['', '— без станка —']].concat(AP.db.machines.filter((m) => m.workshop === w).map((m) => [m.id, m.name]));
+    const m = UI.modal({
+      size: 'lg', title: isNew ? 'Новый сотрудник' : e.name, sub: isNew ? 'Сотрудник появится в табеле, у весов и в начислениях' : 'Изменения попадут в журнал действий',
+      body: html`<form class="form-grid" id="empF">
+        <div class="field full"><label>ФИО <span class="req">*</span></label><input class="input" name="name" value="${e.name}" placeholder="Фамилия Имя"></div>
+        <div class="field"><label>Телефон</label><input class="input" name="phone" value="${e.phone}" inputmode="tel"></div>
+        <div class="field"><label>Дата приёма</label><input class="input" type="date" name="hired" value="${e.hired || D.todayISO()}"></div>
+        <div class="field"><label>Цех</label><select class="select" name="workshop">${UI.options(wsOpts, e.workshop)}</select></div>
+        <div class="field"><label>Должность</label><input class="input" name="position" value="${e.position}" list="posList"><datalist id="posList">${POSITIONS.map((p) => html`<option value="${p}">`)}</datalist></div>
+        <div class="field"><label>Смена</label><select class="select" name="shift">${UI.options(Object.entries(SHIFTS), e.shift)}</select></div>
+        <div class="field"><label>Станок</label><select class="select" name="machine">${UI.options(machOpts(e.workshop), e.machine || '')}</select><span class="hint">Выработка со станка пойдёт в его сдельную оплату</span></div>
+        <div class="field"><label>Оплата</label><select class="select" name="payType">${UI.options([['piece', 'Сдельная — за кг выработки'], ['time', 'Повременная — за смену']], e.payType)}</select></div>
+        ${money ? html`<div class="field"><label>Ставка</label><div class="input-group"><input class="input" type="number" min="0" step="10" name="rate" value="${e.rate}"><span class="addon" data-rateu>${e.payType === 'piece' ? 'сум/кг' : 'сум/смена'}</span></div></div>` : ''}
+        <div class="field full"><label class="switch"><input type="checkbox" name="active" ${e.active !== false ? raw('checked') : ''}>Работает${isNew ? '' : html` <span class="hint">— выключите, если сотрудник уволен: он пропадёт из списков у весов, история останется</span>`}</label></div>
+      </form>`,
+      foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-primary" data-ok>${I('check')}${isNew ? 'Добавить' : 'Сохранить'}</button>`,
+    });
+    const f = m.querySelector('#empF');
+    f.workshop.addEventListener('change', () => { f.machine.innerHTML = String(UI.options(machOpts(f.workshop.value), '')); });
+    f.payType.addEventListener('change', () => { const u = f.querySelector('[data-rateu]'); if (u) u.textContent = f.payType.value === 'piece' ? 'сум/кг' : 'сум/смена'; if (f.rate && isNew) f.rate.value = f.payType.value === 'piece' ? 1200 : 200000; });
+    m.querySelector('[data-ok]').onclick = () => {
+      const d = UI.formData(f);
+      if (!d.name || d.name.length < 3) { f.name.closest('.field').classList.add('is-invalid'); f.name.focus(); return; }
+      const before = isNew ? null : JSON.stringify([e.name, e.position, e.workshop, e.shift, e.machine, e.payType, e.rate, e.active]);
+      const t = isNew ? { id: 'e' + AP.seq('emp') + Date.now().toString(36).slice(-2) } : e;
+      Object.assign(t, { name: d.name, phone: d.phone, hired: d.hired, workshop: d.workshop, position: d.position || 'Рабочий', shift: d.shift, machine: d.machine || null, payType: d.payType, active: !!d.active });
+      if (d.rate != null && d.rate !== '') t.rate = +d.rate; else if (isNew) t.rate = d.payType === 'piece' ? 1200 : 200000;
+      if (isNew) AP.db.employees.push(t);
+      const changed = isNew || before !== JSON.stringify([t.name, t.position, t.workshop, t.shift, t.machine, t.payType, t.rate, t.active]);
+      if (changed) AP.audit(isNew ? 'Добавлен сотрудник' : t.active ? 'Изменён сотрудник' : 'Сотрудник уволен', 'employee', t.id, t.name + ' · ' + t.position + ' · ' + AP.wsName(t.workshop) + (money ? ' · ставка ' + F.m(t.rate) : ''));
+      AP.save(); UI.closeTop(); UI.toast(isNew ? 'Сотрудник добавлен' : 'Сохранено', t.name); AP.render();
+    };
+  }
+
   AP.page('staff', {
     title: 'Персонал',
     render(r) {
       const tab = r.q.tab || 'list';
       const days = monthDays();
-      const list = AP.db.employees.filter((e) => (e.workshop === 'sklad' ? AP.scope() === 'all' && AP.userWorkshop() === 'all' : AP.inScope(e.workshop)));
-      const st = Object.fromEntries(list.map((e) => [e.id, empStats(e, days)]));
+      const showOff = r.q.off === '1';
+      const all = AP.db.employees.filter(empVisible);
+      const list = all.filter((e) => e.active !== false);
+      const st = Object.fromEntries(all.map((e) => [e.id, empStats(e, days)]));
       const money = AP.seeMoney();
+      const edit = AP.can('staff', 2);
       const month = AP.MONTHS_FULL[D.today().getMonth()].toLowerCase();
       let body;
       if (tab === 'tabel') {
-        body = html`<div class="card"><div class="card-h"><h3>Табель за ${month}</h3>${UI.legend([{ name: 'Д — дневная смена', color: 'var(--s1)' }, { name: 'Н — ночная', color: 'var(--s3)' }, { name: 'Б — больничный', color: 'var(--s4)' }])}</div><div class="table-wrap mt-8"><table class="table compact" style="font-size:12px"><thead><tr><th>Сотрудник</th>${days.map((d) => html`<th class="c" style="padding:6px 3px;${[0, 6].includes(D.parse(d).getDay()) ? 'color:var(--bad)' : ''}">${D.parse(d).getDate()}</th>`)}<th class="r">Смен</th><th class="r">Часов</th></tr></thead><tbody>
+        body = html`<div class="card"><div class="card-h"><h3>Табель за ${month}</h3>${UI.legend([{ name: 'Д — дневная смена', color: 'var(--s1)' }, { name: 'Н — ночная', color: 'var(--s3)' }, { name: 'Б — больничный', color: 'var(--s4)' }])}</div><div class="table-wrap mt-8"><table class="table compact no-stack" style="font-size:12px"><thead><tr><th>Сотрудник</th>${days.map((d) => html`<th class="c" style="padding:6px 3px;${[0, 6].includes(D.parse(d).getDay()) ? 'color:var(--bad)' : ''}">${D.parse(d).getDate()}</th>`)}<th class="r">Смен</th><th class="r">Часов</th></tr></thead><tbody>
           ${list.map((e) => { const s = st[e.id]; return html`<tr><td class="nowrap"><b>${e.name}</b><span class="cell-sub">${e.position}</span></td>${days.map((d) => { const v = s.w[d]; return html`<td class="c" style="padding:6px 3px;font-weight:800;color:${v === 'Н' ? 'var(--s3)' : v === 'Б' ? 'var(--s4)' : 'var(--s1)'}">${v || ''}</td>`; })}<td class="r fw-8">${s.shifts}</td><td class="r">${s.shifts * (e.shift === 'D' ? 8 : 11)}</td></tr>`; })}
         </tbody></table></div></div>`;
       } else if (tab === 'pay' && money) {
         const tot = AP.sum(list, (e) => st[e.id].pay);
         body = html`<div class="grid g-3 mb-16">${UI.kpi({ label: 'Начислено за ' + month, icon: 'coins', value: F.short(tot), unit: 'сум', foot: list.length + ' сотрудников' })}${UI.kpi({ label: 'Сдельно', icon: 'weight', value: F.short(AP.sum(list.filter((e) => e.payType === 'piece'), (e) => st[e.id].pay)), unit: 'сум', foot: 'по выработке с весов' })}${UI.kpi({ label: 'Повременно', icon: 'clock', value: F.short(AP.sum(list.filter((e) => e.payType === 'time'), (e) => st[e.id].pay)), unit: 'сум', foot: 'по табелю смен' })}</div>
           <div class="card"><div class="card-h"><h3>Начисления</h3><button class="btn btn-ghost btn-sm" data-x="xpay">${I('download')}Excel</button></div><div class="table-wrap mt-8"><table class="table"><thead><tr><th>Сотрудник</th><th>Оплата</th><th class="r">Ставка</th><th class="r">Выработка</th><th class="r">Смен</th><th class="r">Начислено</th></tr></thead><tbody>
-          ${list.map((e) => { const s = st[e.id]; return html`<tr><td><b>${e.name}</b><span class="cell-sub">${e.position} · ${AP.wsName(e.workshop)}</span></td><td>${e.payType === 'piece' ? html`<span class="badge b-info sm">сдельная</span>` : html`<span class="badge sm">повременная</span>`}</td><td class="r">${F.m(e.rate)} <span class="muted fs-12">${e.payType === 'piece' ? 'сум/кг' : 'сум/смена'}</span></td><td class="r">${s.kg ? F.kg(s.kg) : '—'}</td><td class="r">${s.shifts}</td><td class="r fw-8">${F.m(s.pay)}</td></tr>`; })}
+          ${list.map((e) => { const s = st[e.id]; return html`<tr class="${edit ? 'click' : ''}" ${edit ? raw(`data-emp="${e.id}"`) : ''}><td><b>${e.name}</b><span class="cell-sub">${e.position} · ${AP.wsName(e.workshop)}</span></td><td>${e.payType === 'piece' ? html`<span class="badge b-info sm">сдельная</span>` : html`<span class="badge sm">повременная</span>`}</td><td class="r">${F.m(e.rate)} <span class="muted fs-12">${e.payType === 'piece' ? 'сум/кг' : 'сум/смена'}</span></td><td class="r">${s.kg ? F.kg(s.kg) : '—'}</td><td class="r">${s.shifts}</td><td class="r fw-8">${F.m(s.pay)}</td></tr>`; })}
           </tbody><tfoot><tr><td colspan="5">Итого</td><td class="r">${F.m(tot)}</td></tr></tfoot></table></div></div>`;
       } else {
-        const byW = AP.groupBy(list, 'workshop');
-        body = html`${Object.keys(byW).map((w) => html`<div class="card mb-16"><div class="card-h"><h3>${AP.wsName(w)}</h3><span class="sub">${byW[w].length} чел.</span></div><div class="table-wrap mt-8"><table class="table"><thead><tr><th>Сотрудник</th><th>Должность</th><th>Смена</th><th>Станок</th><th class="r">Выработка за месяц</th><th class="r">Смен</th>${money ? html`<th class="r">Начислено</th>` : ''}</tr></thead><tbody>
-          ${byW[w].map((e) => { const s = st[e.id]; return html`<tr><td><span class="row nowrap" style="gap:10px">${UI.avatar(e.name, e.id, 'sm')}<span><b>${e.name}</b><span class="cell-sub">${e.phone}</span></span></span></td><td class="fs-13">${e.position}</td><td>${{ A: 'А (день)', B: 'Б (ночь)', D: 'дневная' }[e.shift]}</td><td class="fs-13">${e.machine ? AP.machine(e.machine).name : '—'}</td><td class="r fw-7">${s.kg ? F.kg(s.kg) : '—'}</td><td class="r">${s.shifts}</td>${money ? html`<td class="r fw-8">${F.m(s.pay)}</td>` : ''}</tr>`; })}
-        </tbody></table></div></div>`)}`;
+        const shown = showOff ? all.filter((e) => e.active === false) : list;
+        const byW = AP.groupBy(shown, 'workshop');
+        const nOff = all.length - list.length;
+        body = html`<div class="row mb-16"><div class="seg"><button class="${showOff ? '' : 'on'}" data-off="">Работают · ${list.length}</button><button class="${showOff ? 'on' : ''}" data-off="1">Уволены · ${nOff}</button></div>${edit ? html`<span class="muted fs-13 fw-7">Нажмите на сотрудника, чтобы изменить данные</span>` : ''}</div>
+          ${shown.length ? Object.keys(byW).map((w) => html`<div class="card mb-16"><div class="card-h"><h3>${AP.wsName(w)}</h3><span class="sub">${byW[w].length} чел.</span></div><div class="table-wrap mt-8"><table class="table"><thead><tr><th>Сотрудник</th><th>Должность</th><th>Смена</th><th>Станок</th><th>Оплата</th><th class="r">Выработка за месяц</th><th class="r">Смен</th>${money ? html`<th class="r">Начислено</th>` : ''}${edit ? html`<th></th>` : ''}</tr></thead><tbody>
+          ${byW[w].map((e) => { const s = st[e.id]; return html`<tr class="${edit ? 'click' : ''} ${e.active === false ? 'muted' : ''}" ${edit ? raw(`data-emp="${e.id}"`) : ''}><td><span class="row nowrap" style="gap:10px">${UI.avatar(e.name, e.id, 'sm')}<span><b style="color:var(--text)">${e.name}</b><span class="cell-sub">${e.phone}</span></span></span></td><td class="fs-13">${e.position}</td><td>${SHIFTS[e.shift] || '—'}</td><td class="fs-13">${e.machine && AP.machine(e.machine) ? AP.machine(e.machine).name : '—'}</td><td>${e.payType === 'piece' ? html`<span class="badge b-info sm">сдельная</span>` : html`<span class="badge sm">повременная</span>`}</td><td class="r fw-7">${s.kg ? F.kg(s.kg) : '—'}</td><td class="r">${s.shifts}</td>${money ? html`<td class="r fw-8">${F.m(s.pay)}</td>` : ''}${edit ? html`<td class="r"><button class="btn btn-ghost btn-xs" data-emp="${e.id}" aria-label="Изменить">${I('edit')}Изменить</button></td>` : ''}</tr>`; })}
+        </tbody></table></div></div>`) : UI.empty(showOff ? 'Уволенных нет' : 'Сотрудников нет', '')}`;
       }
-      return html`${UI.pageHead('Персонал', 'Около 30 сотрудников: цех, смена, выработка. Заходить в программу им не нужно — выработка приходит с весов и из производства.', html`<span class="badge b-brand plain">${list.length} чел.</span>`)}
+      return html`${UI.pageHead('Персонал', 'Около 30 сотрудников: цех, смена, выработка. Заходить в программу им не нужно — выработка приходит с весов и из производства.', html`<span class="badge b-brand plain">${list.length} чел.</span>${edit ? html`<button class="btn btn-primary" data-x="addemp">${I('plus')}Добавить сотрудника</button>` : ''}`)}
         ${UI.tabs([['list', 'Сотрудники'], ['tabel', 'Табель'], money ? ['pay', 'Начисления'] : null], tab)}${body}`;
     },
     mount(el) {
       UI.bindTabs(el);
+      UI.$$('[data-off]', el).forEach((b) => (b.onclick = () => AP.setQuery({ off: b.dataset.off })));
+      const add = UI.$('[data-x=addemp]', el); if (add) add.onclick = () => empDialog();
+      el.addEventListener('click', (ev) => { const t = ev.target.closest('[data-emp]'); if (t) { ev.stopPropagation(); empDialog(AP.employee(t.dataset.emp)); } });
       const x = UI.$('[data-x=xpay]', el);
-      if (x) x.onclick = () => { const days = monthDays(); AP.exportCSV('zarplata-' + D.todayISO().slice(0, 7), [['Сотрудник', 'Должность', 'Цех', 'Оплата', 'Ставка', 'Выработка, кг', 'Смен', 'Начислено']].concat(AP.db.employees.map((e) => { const s = empStats(e, days); return [e.name, e.position, AP.wsName(e.workshop), e.payType === 'piece' ? 'сдельная' : 'повременная', e.rate, Math.round(s.kg), s.shifts, Math.round(s.pay)]; }))); };
+      if (x) x.onclick = () => { const days = monthDays(); AP.exportCSV('zarplata-' + D.todayISO().slice(0, 7), [['Сотрудник', 'Должность', 'Цех', 'Оплата', 'Ставка', 'Выработка, кг', 'Смен', 'Начислено']].concat(AP.db.employees.filter((e) => e.active !== false).map((e) => { const s = empStats(e, days); return [e.name, e.position, AP.wsName(e.workshop), e.payType === 'piece' ? 'сдельная' : 'повременная', e.rate, Math.round(s.kg), s.shifts, Math.round(s.pay)]; }))); };
     },
   });
-
   /* ================= СПРАВОЧНИКИ ================= */
   const KIND = { granule: 'Гранулят', additive: 'Добавка', masterbatch: 'Мастербатч', ink: 'Краска', solvent: 'Растворитель', pack: 'Упаковка' };
   const TYPE = { extrusion: 'Экструдер', print: 'Флексопечать', cut: 'Резка и запайка', pack: 'Упаковка' };
@@ -123,7 +176,7 @@
       }));
       UI.$$('[data-em]', el).forEach((b) => (b.onclick = () => {
         const mt = AP.material(b.dataset.em);
-        const m = UI.modal({ title: mt.name, body: html`<form class="form-grid"><div class="field"><label>Минимальный остаток, ${mt.unit}</label><input class="input" type="number" name="min" value="${mt.min}"><span class="hint">Ниже — предупреждение руководителю</span></div>${AP.seeMoney() ? html`<div class="field"><label>Цена, сум/${mt.unit}</label><input class="input" type="number" name="price" value="${mt.price}"></div>` : ''}</form>`, foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-primary" data-ok>Сохранить</button>` });
+        const m = UI.modal({ title: mt.name, body: html`<form class="form-grid"><div class="field"><label>Минимальный остаток, ${mt.unit}</label><input class="input" type="number" name="min" value="${mt.min}"><span class="hint">Ниже — предупреждение директору</span></div>${AP.seeMoney() ? html`<div class="field"><label>Цена, сум/${mt.unit}</label><input class="input" type="number" name="price" value="${mt.price}"></div>` : ''}</form>`, foot: html`<button class="btn btn-ghost" data-close>Отмена</button><button class="btn btn-primary" data-ok>Сохранить</button>` });
         m.querySelector('[data-ok]').onclick = () => { const d = UI.formData(m.querySelector('form')); mt.min = +d.min || 0; if (d.price) mt.price = +d.price; AP.audit('Изменена позиция справочника', 'material', mt.id, mt.name + ' · минимум ' + mt.min); AP.save(); UI.closeTop(); AP.render(); };
       }));
       const am = UI.$('[data-x=addm]', el);
@@ -228,11 +281,11 @@
   function rightsDrawer(u) {
     const isDir = u.role === 'director';
     const body = html`<form id="rf">
-      ${isDir ? html`<div class="alert alert-info mb-16">${I('shield')}<div class="grow"><b>Главный руководитель видит всё</b><small>Его права не ограничиваются. Финансовый дашборд — только у него.</small></div></div>` : ''}
+      ${isDir ? html`<div class="alert alert-info mb-16">${I('shield')}<div class="grow"><b>Директор видит всё</b><small>Его права не ограничиваются. Финансовый дашборд — только у него.</small></div></div>` : ''}
       <div class="form-grid mb-16"><div class="field"><label>Роль (шаблон прав)</label><select class="select" name="role" ${isDir ? raw('disabled') : ''}>${UI.options(Object.entries(AP.ROLE_PRESETS).filter(([k]) => k !== 'director' || isDir).map(([k, v]) => [k, v.title]), u.role)}</select><span class="hint">Смена шаблона заполнит матрицу ниже — потом её можно подправить</span></div>
         <div class="field"><label>Доступ к цехам</label><select class="select" name="workshop" ${isDir ? raw('disabled') : ''}>${UI.options([['all', 'Оба цеха'], ['w1', 'Только Цех №1'], ['w2', 'Только Цех №2']], u.workshop)}</select></div></div>
       <div class="card mb-16"><div class="table-wrap"><table class="table perm-table"><thead><tr><th>Раздел</th><th>Уровень доступа</th></tr></thead><tbody>
-        ${AP.SECTIONS.map((s) => html`<tr><td class="fw-7">${s.title}${s.money ? html` <span class="badge sm">финансы</span>` : ''}</td><td>${s.directorOnly ? html`<span class="badge b-dark plain">${I('lock', 'icon-16')}только главный руководитель — выдать нельзя</span>` : html`<select class="select lvl-${AP.level(s.key, u)}" name="p_${s.key}" ${isDir ? raw('disabled') : ''}>${UI.options(AP.LEVELS.map((t, i) => [i, t]), AP.level(s.key, u))}</select>`}</td></tr>`)}
+        ${AP.SECTIONS.map((s) => html`<tr><td class="fw-7">${s.title}${s.money ? html` <span class="badge sm">финансы</span>` : ''}</td><td>${s.directorOnly ? html`<span class="badge b-dark plain">${I('lock', 'icon-16')}только директор — выдать нельзя</span>` : html`<select class="select lvl-${AP.level(s.key, u)}" name="p_${s.key}" ${isDir ? raw('disabled') : ''}>${UI.options(AP.LEVELS.map((t, i) => [i, t]), AP.level(s.key, u))}</select>`}</td></tr>`)}
       </tbody></table></div></div>
       <div class="card"><div class="card-h"><h3>Особые права</h3></div><div class="card-b stack" style="gap:12px">${AP.FLAGS.map((f) => html`<label class="switch"><input type="checkbox" name="f_${f.key}" ${AP.flag(f.key, u) ? raw('checked') : ''} ${isDir ? raw('disabled') : ''}><span><b>${f.title}</b><br><span class="hint">${f.hint}</span></span></label>`)}</div></div>
       <div class="fs-12 muted mt-12">Уровни: «Просмотр» — только смотреть; «Изменение» — создавать и менять; «Полный» — ещё удалять и утверждать.</div></form>`;
@@ -280,7 +333,7 @@
       return html`${UI.pageHead('Пользователи и права', 'Права настраиваются отдельно для каждого: какие разделы видит, что может только смотреть, а что — создавать, менять, удалять и утверждать', html`<button class="btn btn-primary" data-x="add">${I('plus')}Добавить пользователя</button>`)}
         <div class="grid g-21 mb-16">
           <div class="card iris"><div class="card-h"><h3>Кому нужен доступ по ТЗ</h3><span class="sub">раздел 2</span></div><div class="card-b stack" style="gap:12px">
-            ${[['shield', 'Главный руководитель', 'видит всё по обоим цехам, финансам и отчётам; создаёт пользователей; журнал действий; утверждает важные операции; единственный видит финансовый дашборд'], ['factory', 'Начальник цеха №1 и №2', 'только свой цех: задания, выработка, сырьё и краски цеха, брак, простои, весы. Финансов и чужого цеха не видит'], ['users', 'Около 30 сотрудников', 'в программу не заходят — ведутся списком в «Персонале»: цех, смена, выработка, начисления']].map(([ic, t, d]) => html`<div class="row nowrap" style="align-items:flex-start"><span class="avatar" style="background:var(--brand)">${I(ic, 'icon-16')}</span><div><b>${t}</b><div class="fs-13 text-2">${d}</div></div></div>`)}
+            ${[['shield', 'Директор', 'видит всё по обоим цехам, финансам и отчётам; создаёт пользователей; журнал действий; утверждает важные операции; единственный видит финансовый дашборд'], ['factory', 'Начальник цеха №1 и №2', 'только свой цех: задания, выработка, сырьё и краски цеха, брак, простои, весы. Финансов и чужого цеха не видит'], ['users', 'Около 30 сотрудников', 'в программу не заходят — ведутся списком в «Персонале»: цех, смена, выработка, начисления']].map(([ic, t, d]) => html`<div class="row nowrap" style="align-items:flex-start"><span class="avatar" style="background:var(--brand)">${I(ic, 'icon-16')}</span><div><b>${t}</b><div class="fs-13 text-2">${d}</div></div></div>`)}
           </div></div>
           <div class="card"><div class="card-h"><h3>Дополнительные роли</h3><span class="sub">не обязательны на старте</span></div><div class="card-b fs-13 text-2" style="font-weight:600">Кладовщик, менеджер по продажам, бухгалтер и оператор весов уже заведены, но <b>отключены</b>. Включите переключателем, когда понадобится, — без переделки программы.</div></div>
         </div>
@@ -328,8 +381,8 @@
         const n = +(r.q.n || 150);
         body = html`<div class="card"><div class="card-h" style="padding-bottom:14px">
           <div class="input-icon grow" style="max-width:320px">${I('search')}<input class="input" data-f="q" placeholder="Номер заказа, QR, действие…" value="${r.q.q || ''}"></div>
-          <select class="select" data-f="u" style="max-width:220px">${UI.options(AP.db.users.map((u) => [u.id, u.name]), r.q.u, 'Все пользователи')}</select>
-          <select class="select" data-f="e" style="max-width:200px">${UI.options(Object.entries(ENT), r.q.e, 'Все объекты')}</select>
+          <select class="select" data-f="u" aria-label="Пользователь" style="max-width:220px">${UI.options(AP.db.users.map((u) => [u.id, u.name]), r.q.u, 'Все пользователи')}</select>
+          <select class="select" data-f="e" aria-label="Объект" style="max-width:200px">${UI.options(Object.entries(ENT), r.q.e, 'Все объекты')}</select>
           <span class="badge b-dark plain right">${I('lock', 'icon-16')}записи нельзя изменить или удалить</span></div>
           <div class="table-wrap"><table class="table compact"><thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Подробности</th></tr></thead><tbody>
           ${list.slice(0, n).map((a) => html`<tr><td class="nowrap">${F.dt(a.ts)}</td><td class="nowrap"><span class="row nowrap" style="gap:8px">${UI.avatar(a.user, a.uid || a.user, 'sm')}<span class="fs-13 fw-7">${a.user}</span></span></td><td class="fw-7">${a.action}${a.entity && ENT[a.entity] ? html`<span class="cell-sub">${ENT[a.entity]}</span>` : ''}</td><td class="fs-13">${a.entity === 'order' && a.entityId && AP.order(a.entityId) ? html`<a href="#" data-act="open-order" data-id="${a.entityId}">${a.details}</a>` : a.entity === 'unit' && a.entityId ? html`<a href="#/qr/${a.entityId}">${a.entityId}</a> · ${a.details}` : a.details}</td></tr>`)}
