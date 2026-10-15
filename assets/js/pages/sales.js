@@ -152,15 +152,18 @@
     })}</div>`;
   }
 
+  // количество в две строки: основная единица крупно, пачки/мешки под ней — таблица помещается в половину карточки
+  const matCell = (mid, qty, sub) => { const [a, b] = AP.fmtMat(mid, qty).split(' · '); return html`<span class="nowrap fw-7">${a}</span>${sub != null ? html`<span class="cell-sub">${sub}</span>` : b ? html`<span class="cell-sub nowrap">${b}</span>` : ''}`; };
   function materialsBlock(o) {
     const wo = AP.writeoffsOf(o.id);
     const st = AP.stock();
     if (!wo.length) {
       const lines = AP.recipeLines(o, AP.kgOf(AP.product(o.productId), o.qty));
-      return html`<table class="table compact"><thead><tr><th>Сырьё по рецептуре</th><th class="r">Нужно</th><th class="r">На складах</th><th></th></tr></thead><tbody>${lines.map((l) => {
+      return html`<div class="table-wrap"><table class="table compact"><thead><tr><th>Сырьё</th><th class="r">Нужно</th><th class="r">Есть</th></tr></thead><tbody>${lines.map((l) => {
         const have = st[l.m].total, ok = have >= l.qty;
-        return html`<tr><td class="fw-7">${AP.material(l.m).name}</td><td class="r nowrap">${AP.fmtMat(l.m, l.qty)}</td><td class="r nowrap">${AP.fmtMat(l.m, have)}</td><td class="r">${ok ? html`<span class="badge b-ok sm">хватает</span>` : html`<span class="badge b-bad sm">не хватает ${F.num(l.qty - have, 1)}</span>`}</td></tr>`;
-      })}</tbody></table>`;
+        const status = html`<span class="${ok ? 'ok-t' : 'bad-t'}">${ok ? 'хватает' : 'не хватает ' + AP.fmtMat(l.m, l.qty - have).split(' · ')[0]}</span>`;
+        return html`<tr><td class="fw-7">${AP.material(l.m).name}</td><td class="r">${matCell(l.m, l.qty)}</td><td class="r">${matCell(l.m, have, status)}</td></tr>`;
+      })}</tbody></table></div>`;
     }
     const g = AP.groupBy(wo, 'materialId');
     const rows = Object.keys(g).map((m) => ({ label: AP.material(m).name, fact: AP.sum(g[m], 'qty'), norm: AP.sum(g[m], 'norm'), unit: AP.material(m).unit }));

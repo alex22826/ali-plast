@@ -448,7 +448,7 @@
     const m = AP.material(mid);
     if (!m) return F.num(qty);
     let s = F.num(qty, m.unit === 'кг' && qty < 100 ? 1 : 0) + ' ' + m.unit;
-    if (m.pack) s += ' · ' + F.num(qty / m.pack.qty, 1) + ' ' + m.pack.name;
+    if (m.pack && Math.abs(qty / m.pack.qty) >= 0.1) s += ' · ' + F.num(qty / m.pack.qty, 1) + ' ' + m.pack.name; // «1 шт · 0,0 пачк.» не показываем
     return s;
   };
 

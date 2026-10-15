@@ -326,20 +326,21 @@
       return r;
     });
   };
+  // compact — для карточки клиента: без колонки «Клиент» (он один) и без отдельной «Готово» (процент под статусом), чтобы влезть в панель
   UI.ordersTable = function (list, { money = AP.seeMoney(), compact = false } = {}) {
     if (!list.length) return UI.empty('Заказов нет', 'Под выбранные условия ничего не подходит');
-    return html`<div class="table-wrap"><table class="table ${compact ? 'compact' : ''}"><thead><tr><th>Заказ</th><th>Клиент</th><th>Продукция</th><th class="r">Тираж</th><th>Срок</th><th>Статус</th><th style="width:120px">Готово</th>${money ? html`<th class="r">Сумма</th>` : ''}</tr></thead><tbody>
+    return html`<div class="table-wrap"><table class="table ${compact ? 'compact' : ''}"><thead><tr><th>Заказ</th>${compact ? '' : html`<th>Клиент</th>`}<th>Продукция</th><th class="r">Тираж</th><th>Срок</th><th>Статус</th>${compact ? '' : html`<th style="width:120px">Готово</th>`}${money ? html`<th class="r">Сумма</th>` : ''}</tr></thead><tbody>
       ${list.map((o) => {
         const p = AP.product(o.productId), st = AP.orderStatus(o), od = AP.isOverdue(o);
         const stage = st === 'production' ? AP.STAGES[AP.currentStage(o)].short : '';
         return html`<tr class="click ${od ? 'row-bad' : ''}" data-act="open-order" data-id="${o.id}">
           <td><span class="cell-title">${o.no}</span>${o.urgent ? html` <span class="chip urgent" data-tip="${o.urgent.reason}">срочно</span>` : ''}<span class="cell-sub">${F.date(o.date)}</span></td>
-          <td><span class="cell-title">${AP.client(o.clientId).name}</span><span class="cell-sub">${UI.wsChip(o.workshop)}</span></td>
-          <td><span class="fw-7">${p.name}</span><span class="cell-sub">${o.material} · ${o.thick} мкм · ${o.color}${o.logo ? ' · логотип ' + o.inks.length + ' цв.' : ''}</span></td>
+          ${compact ? '' : html`<td><span class="cell-title">${AP.client(o.clientId).name}</span><span class="cell-sub">${UI.wsChip(o.workshop)}</span></td>`}
+          <td><span class="fw-7">${p.name}</span>${compact ? '' : html`<span class="cell-sub">${o.material} · ${o.thick} мкм · ${o.color}${o.logo ? ' · логотип ' + o.inks.length + ' цв.' : ''}</span>`}</td>
           <td class="r nowrap"><b>${p.base === 'кг' ? F.kg(o.qty) : F.num(o.qty)}</b><span class="cell-sub">${p.base === 'кг' ? F.num(AP.unitsCount(p, o.qty)) + ' рул.' : F.kg(AP.kgOf(p, o.qty))}</span></td>
           <td class="nowrap ${od ? 'bad-t fw-8' : ''}">${F.date(o.deadline)}${od ? html`<span class="cell-sub bad-t">просрочен</span>` : ''}</td>
-          <td>${AP.statusBadge(st, stage)}</td>
-          <td>${UI.progress(AP.orderProgress(o), st === 'closed' || st === 'shipped' ? 'ok' : '', 'sm')}<span class="cell-sub">${F.pct(AP.orderProgress(o) * 100, 0)}</span></td>
+          <td>${AP.statusBadge(st, stage)}${compact ? html`<span class="cell-sub">готово ${F.pct(AP.orderProgress(o) * 100, 0)}</span>` : ''}</td>
+          ${compact ? '' : html`<td>${UI.progress(AP.orderProgress(o), st === 'closed' || st === 'shipped' ? 'ok' : '', 'sm')}<span class="cell-sub">${F.pct(AP.orderProgress(o) * 100, 0)}</span></td>`}
           ${money ? html`<td class="r nowrap fw-7">${F.m(AP.orderAmount(o))}</td>` : ''}
         </tr>`;
       })}</tbody></table></div>`;
